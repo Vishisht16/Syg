@@ -14,19 +14,23 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: shellcheck
         run: shellcheck install.sh hack/test-install.sh
       - name: the relay
         run: node --test relay/relay.test.js
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.9"
+          cache: false
       - name: actionlint
-        run: |
-          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
-          ./actionlint -color
+        # Built from its module, which Go checks against the checksum database.
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -color
       - name: the install script, against a fake release
+        # Any executable stands in for syg: the test is of the installer.
         run: |
-          curl -fsSL -o syg.tgz "https://github.com/vishisht16/syg/releases/latest/download/syg_$(curl -fsSL https://api.github.com/repos/vishisht16/syg/releases/latest | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')_linux_amd64.tar.gz" \
-            && tar xzf syg.tgz syg && sh hack/test-install.sh ./syg \
-            || echo "no release yet: the install test runs once there is one"
+          printf '#!/bin/sh\necho "syg 0.0.0"\n' > fake-syg
+          chmod +x fake-syg
+          sh hack/test-install.sh ./fake-syg

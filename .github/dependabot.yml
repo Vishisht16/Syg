@@ -1,0 +1,18 @@
+version: 2
+updates:
+  # Monthly, one pull request per ecosystem: the workflows' actions (pinned
+  # by commit) and the relay's npm packages.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: npm
+    directory: /relay
+    schedule:
+      interval: monthly
+    groups:
+      relay:
+        patterns: ["*"]
