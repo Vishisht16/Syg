@@ -1,0 +1,32 @@
+name: lint
+
+# The scripts, workflows and relay in this repository. Safe on pull requests:
+# it runs no secret and no source.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: shellcheck
+        run: shellcheck install.sh hack/test-install.sh
+      - name: the relay
+        run: node --test relay/relay.test.js
+      - name: actionlint
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
+          ./actionlint -color
+      - name: the install script, against a fake release
+        run: |
+          curl -fsSL -o syg.tgz "https://github.com/vishisht16/syg/releases/latest/download/syg_$(curl -fsSL https://api.github.com/repos/vishisht16/syg/releases/latest | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')_linux_amd64.tar.gz" \
+            && tar xzf syg.tgz syg && sh hack/test-install.sh ./syg \
+            || echo "no release yet: the install test runs once there is one"

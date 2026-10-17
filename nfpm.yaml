@@ -1,0 +1,20 @@
+# .deb and .rpm packages of a release binary (nfpm, by the release workflow):
+#   cp bin/linux-amd64/syg pkg/syg
+#   VERSION=1.0.0 ARCH=amd64 nfpm package -p deb -t dist/
+name: syg
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+maintainer: Vishisht <syg@vishisht.tech>
+description: A typed language for a Kubernetes service's deployment surface, and the compiler that checks it.
+homepage: https://syg.vishisht.tech
+license: Syg EULA (https://syg.vishisht.tech/eula)
+contents:
+  - src: pkg/syg
+    dst: /usr/bin/syg
+    file_info:
+      mode: 0755
+  - src: EULA.md
+    dst: /usr/share/doc/syg/EULA.md
+  - src: PRIVACY.md
+    dst: /usr/share/doc/syg/PRIVACY.md

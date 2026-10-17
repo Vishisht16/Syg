@@ -1,0 +1,280 @@
+name: release
+
+# Builds, tests and publishes a Syg release from the private source, in this
+# public repository, so every release is built where anyone can watch it and
+# carries a provenance attestation, while the source stays private.
+#
+# Guardrails, so that no source reaches this repository or its logs:
+#   - Runs on a tag or by hand, never on a pull request: a fork's workflow
+#     never sees the secrets, and no outside change runs here.
+#   - The core checkout uses CORE_READ_TOKEN (read-only, one repository),
+#     available only to the `release` environment, which needs approval.
+#   - No caches (a pull request could read a cache), and every upload names
+#     its files explicitly: only dist/ ever leaves the runner.
+#   - Tests run quietly: hack/quiet-test.py prints how many packages passed,
+#     never a test's output, a stack trace or a package name. Failures are
+#     read in the private repository's CI, which runs the same tests.
+#   - No verbose build flags; the checkout is deleted when the job ends.
+#   - Third-party actions are pinned by commit.
+#   - Syg's own runs here send no usage statistics (SYG_TELEMETRY=off).
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "the tag of syg-core to build, e.g. v1.0.0"
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  SYG_TELEMETRY: "off"
+  TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write      # cosign keyless signing and attestations
+      attestations: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: check out the source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: vishisht16/syg-core
+          ref: ${{ env.TAG }}
+          token: ${{ secrets.CORE_READ_TOKEN }}
+          path: core
+          persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: core/go.mod
+          cache: false
+      - name: test
+        working-directory: core
+        run: go test -json ./... 2>/dev/null | python3 ../hack/quiet-test.py
+      - name: build
+        working-directory: core
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          version=${TAG#v}
+          mkdir -p ../dist
+          # The licence and privacy statement travel in every archive; their
+          # one source is the documentation.
+          cp docs/site/eula.md ../EULA.md
+          cp docs/site/privacy.md ../PRIVACY.md
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+            os=${target%/*} arch=${target#*/} ext=""
+            [ "$os" = windows ] && ext=.exe
+            GOOS=$os GOARCH=$arch go build -trimpath \
+              -ldflags "-s -w -buildid= -X github.com/vishisht16/syg/internal/buildinfo.Version=$version" \
+              -o "../bin/$os-$arch/syg$ext" ./cmd/syg
+            name="syg_${version}_${os}_${arch}"
+            if [ "$os" = windows ]; then archive="$name.zip"; else archive="$name.tar.gz"; fi
+            python3 hack/archive.py "../bin/$os-$arch/syg$ext" "../dist/$archive" ../README.md ../EULA.md ../PRIVACY.md
+          done
+      - name: release notes
+        working-directory: core
+        run: python3 hack/release-notes.py "$TAG" > ../dist/notes.md
+      - name: remove the source
+        if: always()
+        run: rm -rf core
+      - uses: anchore/sbom-action/download-syft@7b36ad622f042cab6f59a75c2ac24ccb256e9b45 # v0.20.4
+      - name: SBOMs
+        # One per archive, from the binary inside it: its Go modules, as the
+        # binary records them.
+        run: |
+          for d in bin/*-*; do
+            os=${d#bin/}; os=${os%-*}; arch=${d##*-}
+            ext=tar.gz; [ "$os" = windows ] && ext=zip
+            exe=syg; [ "$os" = windows ] && exe=syg.exe
+            syft scan "file:$d/$exe" -o spdx-json="dist/syg_${TAG#v}_${os}_${arch}.$ext.sbom.json" -q
+          done
+      - name: packages
+        run: |
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.43.0
+          version=${TAG#v}
+          mkdir -p pkg
+          for arch in amd64 arm64; do
+            cp "bin/linux-$arch/syg" pkg/syg
+            for fmt in deb rpm; do
+              VERSION="$version" ARCH="$arch" "$(go env GOPATH)/bin/nfpm" package -f nfpm.yaml -p "$fmt" -t dist/
+            done
+          done
+      - name: checksums
+        run: cd dist && sha256sum syg_* syg-* > SHA256SUMS && cat SHA256SUMS
+      - uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
+      - name: sign
+        run: |
+          for f in dist/syg_* dist/syg-* dist/SHA256SUMS; do
+            case "$f" in *.sigstore.json) continue ;; esac
+            cosign sign-blob --yes --bundle "$f.sigstore.json" "$f" >/dev/null
+          done
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-path: |
+            dist/syg_*.tar.gz
+            dist/syg_*.zip
+            dist/syg_*.deb
+            dist/syg-*.rpm
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  # What a user does: download, verify, run, on each OS, from the archive.
+  smoke:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {runner: ubuntu-latest, os: linux, arch: amd64}
+          - {runner: ubuntu-24.04-arm, os: linux, arch: arm64}
+          - {runner: macos-latest, os: darwin, arch: arm64}
+          - {runner: macos-latest, os: darwin, arch: amd64}  # under Rosetta
+          - {runner: windows-latest, os: windows, arch: amd64}
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dist
+          path: dist
+      - name: rosetta
+        if: matrix.os == 'darwin' && matrix.arch == 'amd64'
+        run: /usr/bin/pgrep -q oahd || softwareupdate --install-rosetta --agree-to-license
+      - name: verify and unpack
+        run: |
+          cd dist
+          if command -v sha256sum >/dev/null; then sha256sum --check --ignore-missing SHA256SUMS
+          else shasum -a 256 --check --ignore-missing SHA256SUMS; fi
+          name="syg_${TAG#v}_${{ matrix.os }}_${{ matrix.arch }}"
+          mkdir bin
+          if [ "${{ matrix.os }}" = windows ]; then unzip -q "$name.zip" -d bin; else tar xzf "$name.tar.gz" -C bin; fi
+      - name: run it
+        run: |
+          syg=dist/bin/syg; [ "${{ matrix.os }}" = windows ] && syg=dist/bin/syg.exe
+          "$syg" version | tee version.txt
+          grep -q "syg ${TAG#v} " version.txt
+          "$syg" init new --service api
+          "$syg" check new
+          "$syg" build new -o out
+          ls out
+          printf 'module shop\n\nservice api {\n  image "registry.example.com/api:1.0.0"\n  replicas 1\n  port http 8080\n  resources { cpu 100m, memory 128Mi }\n  disruption { minAvailable 1 }\n  internal :http\n}\n' > shop.syg
+          if "$syg" check shop.syg > findings.txt 2>&1; then :; fi
+          grep -q "single-replica-budget" findings.txt
+          "$syg" explain single-replica-budget | head -3
+
+  publish:
+    needs: smoke
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dist
+          path: dist
+      - name: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pre=""; case "$TAG" in *-*) pre="--prerelease";; esac
+          latest="--latest"; [ -n "$pre" ] && latest="--latest=false"
+          gh release create "$TAG" dist/syg_* dist/syg-* dist/SHA256SUMS dist/SHA256SUMS.sigstore.json \
+            --title "Syg ${TAG#v}" --notes-file dist/notes.md $pre $latest
+
+  image:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dist
+          path: dist
+      - name: unpack the linux binaries
+        run: |
+          mkdir -p image
+          cp /etc/ssl/certs/ca-certificates.crt image/
+          for arch in amd64 arm64; do
+            mkdir -p "image/linux/$arch"
+            tar xzf "dist/syg_${TAG#v}_linux_${arch}.tar.gz" -C "image/linux/$arch" syg
+          done
+      - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
+      - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+      - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: tags
+        id: tags
+        run: |
+          v=${TAG#v}
+          t="ghcr.io/vishisht16/syg:$v"
+          case "$v" in *-*) ;; *) t="$t,ghcr.io/vishisht16/syg:latest,ghcr.io/vishisht16/syg:${v%%.*}" ;; esac
+          echo "tags=$t" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/vishisht16/syg
+            org.opencontainers.image.version=${{ env.TAG }}
+
+  channels:
+    needs: publish
+    if: ${{ !contains(github.event.inputs.tag || github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dist
+          path: dist
+      - name: Scoop
+        run: |
+          python3 hack/render.py scoop "${TAG#v}" dist/SHA256SUMS > bucket/syg.json
+          git config user.name "syg-release"
+          git config user.email "syg-release@users.noreply.github.com"
+          git add bucket/syg.json
+          git diff --cached --quiet || git commit -m "Scoop: syg ${TAG#v}"
+          git push origin HEAD:main
+      - name: Homebrew
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+        run: |
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/vishisht16/homebrew-tap.git" tap
+          mkdir -p tap/Formula
+          python3 hack/render.py brew "${TAG#v}" dist/SHA256SUMS > tap/Formula/syg.rb
+          cd tap
+          git config user.name "syg-release"
+          git config user.email "syg-release@users.noreply.github.com"
+          git add Formula/syg.rb
+          git diff --cached --quiet || git commit -m "syg ${TAG#v}"
+          git push origin HEAD

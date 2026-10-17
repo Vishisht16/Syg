@@ -1,0 +1,19 @@
+# For pre-commit (https://pre-commit.com): check Syg modules before a commit.
+#   - repo: https://github.com/vishisht16/syg
+#     rev: v1.0.0
+#     hooks:
+#       - id: syg-check
+#       - id: syg-fmt
+- id: syg-check
+  name: syg check
+  description: Check Syg modules; findings that fail the build block the commit.
+  entry: ghcr.io/vishisht16/syg:1 check
+  language: docker_image
+  files: \.syg$
+  pass_filenames: false
+- id: syg-fmt
+  name: syg fmt
+  description: Require Syg files to be formatted.
+  entry: ghcr.io/vishisht16/syg:1 fmt --check
+  language: docker_image
+  files: \.syg$
