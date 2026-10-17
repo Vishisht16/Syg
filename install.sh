@@ -50,13 +50,13 @@ latest() {
 }
 
 # verify_signature checks the archive's cosign signature when cosign 3 or newer
-# is installed. Releases are signed with cosign 3, whose bundles older versions
-# cannot read; without it, the checksum stands alone, as it does without cosign.
+# is installed (releases are signed in the bundle format cosign 3 writes).
+# Otherwise the checksum stands alone, as it does without cosign.
 verify_signature() {
   command -v cosign >/dev/null 2>&1 || return 0
   major="$(cosign version 2>/dev/null | sed -n 's/^GitVersion: *v\{0,1\}\([0-9][0-9]*\).*/\1/p' | head -n 1)"
   if [ -z "$major" ] || [ "$major" -lt 3 ]; then
-    say "the installed cosign cannot read this release's signature (cosign 3 or newer can): signature not checked"
+    say "the installed cosign is older than 3, which this script needs to check a signature: signature not checked"
     return 0
   fi
   fetch "$BASE/v$version/$archive.sigstore.json" "$tmp/bundle.json" || die "no signature for $archive"

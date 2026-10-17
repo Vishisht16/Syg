@@ -1,7 +1,7 @@
 #!/bin/sh
 # Tests install.sh against a fake release served from a directory (file://): a
 # good install, a version pin, a checksum mismatch, a missing archive, and the
-# signature check with a stand-in cosign (too old to read the signature; a
+# signature check with a stand-in cosign (older than the script checks with; a
 # signature that verifies; one that does not; none at all).
 #   sh hack/test-install.sh PATH-TO-A-SYG-BINARY
 set -eu
@@ -40,7 +40,7 @@ export SYG_DOWNLOAD_BASE="file://$work/rel" SYG_API="file://$work/latest.json"
 SYG_INSTALL_DIR="$work/a" sh "$here/install.sh" 2>"$work/log" || { cat "$work/log"; fail "a good install failed"; }
 [ -x "$work/a/syg" ] || fail "no binary installed"
 grep -q "checksum verified" "$work/log" || fail "the checksum was not verified"
-grep -q "signature not checked" "$work/log" || fail "cosign 2 was not reported as unable to check the signature"
+grep -q "signature not checked" "$work/log" || fail "cosign 2 was not reported as too old to check the signature"
 for f in "$work/a"/.syg.new.*; do [ ! -e "$f" ] || fail "a temporary binary was left behind: $f"; done
 
 release 1.2.3 signed
