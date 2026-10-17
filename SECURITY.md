@@ -9,7 +9,7 @@ each archive with cosign (keyless, tied to the workflow) and records a build
 provenance attestation. To check that a binary is one this workflow built:
 
 ```console
-$ gh attestation verify syg_1.0.0_linux_amd64.tar.gz --repo vishisht16/syg
+$ gh attestation verify syg_1.0.0_linux_amd64.tar.gz --repo Vishisht16/Syg
 ```
 
 Syg never applies anything to a cluster. `syg snapshot` is the only command

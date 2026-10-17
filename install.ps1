@@ -7,6 +7,8 @@
 # %LOCALAPPDATA%\Programs\syg), which it adds to the user's PATH.
 #   $env:SYG_VERSION = "1.0.0"   a version instead of the latest
 $ErrorActionPreference = "Stop"
+# Windows PowerShell 5.1 may offer only TLS 1.0, which GitHub refuses.
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 $repo = "vishisht16/syg"
 $base = if ($env:SYG_DOWNLOAD_BASE) { $env:SYG_DOWNLOAD_BASE } else { "https://github.com/$repo/releases/download" }
 $dir = if ($env:SYG_INSTALL_DIR) { $env:SYG_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA "Programs\syg" }
@@ -14,7 +16,15 @@ $arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture 
 
 $version = $env:SYG_VERSION
 if (-not $version) {
-    $version = (Invoke-RestMethod "https://api.github.com/repos/$repo/releases/latest").tag_name
+    # The newest release, from where releases/latest redirects to: unlike
+    # GitHub's API, it has no hourly limit per address.
+    $req = [System.Net.HttpWebRequest]::Create("https://github.com/$repo/releases/latest")
+    $req.AllowAutoRedirect = $false
+    $req.Method = "HEAD"
+    $res = $req.GetResponse()
+    try { $location = $res.Headers["Location"] } finally { $res.Close() }
+    if ($location -notmatch "/releases/tag/v([^/?#]+)$") { throw "could not find the latest release" }
+    $version = $Matches[1]
 }
 $version = $version.TrimStart("v")
 $archive = "syg_${version}_windows_${arch}.zip"
