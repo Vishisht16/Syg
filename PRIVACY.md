@@ -41,7 +41,8 @@ Vercel, which runs the relay, keeps its request logs for an hour.
 
 Events go to Syg's relay at `api.syg.vishisht.tech`, which drops the IP
 address and forwards them to an analytics project used only for Syg, at
-PostHog in the EU. PostHog keeps them for 12 months and then deletes them.
+PostHog. Both are in the EU: the relay runs in Vercel's Frankfurt region, and
+PostHog keeps the events in its EU region for 12 months, then deletes them.
 The relay's code is public, in
 [`relay/`](https://github.com/vishisht16/syg/tree/main/relay).
 

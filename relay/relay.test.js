@@ -38,12 +38,17 @@ test("anything outside the allowlist rejects the event", () => {
   assert.ok(!("module" in clean({ ...good, module: "payments" })), "an unknown field is dropped");
 });
 
+test("a crash's frames pass as Go names them, generics and closures included", () => {
+  const crash = ["internal/env.find[...]", "internal/cli.Main.func2", "internal/lsp.(*server).handle"];
+  assert.deepEqual(clean({ ...good, crash }).crash, crash);
+});
+
 test("PostHog gets no IP address, and no person for a CI run", () => {
   const ci = toPostHog(clean({ ...good, id: undefined, ci: "github" }));
   assert.equal(ci.properties.$ip, null);
   assert.equal(ci.properties.$geoip_disable, true);
   assert.equal(ci.properties.$process_person_profile, false);
-  assert.match(ci.distinct_id, /^ci-/);
+  assert.equal(ci.distinct_id, "anon-" + good.event_id);
   const local = toPostHog(clean(good));
   assert.equal(local.distinct_id, good.id);
   assert.equal(local.uuid, good.event_id);
@@ -52,7 +57,7 @@ test("PostHog gets no IP address, and no person for a CI run", () => {
 test("events: only clean events reach PostHog, in the background", async () => {
   const sent = [];
   const get = async (url, init) => {
-    sent.push({ url, body: JSON.parse(init.body) });
+    sent.push({ url, body: JSON.parse(init.body), signal: init.signal });
     return new Response(null);
   };
   const waits = [];
@@ -66,6 +71,8 @@ test("events: only clean events reach PostHog, in the background", async () => {
   assert.equal(sent[0].url, "https://eu.i.posthog.com/batch/");
   assert.equal(sent[0].body.api_key, "phc_test");
   assert.equal(sent[0].body.batch.length, 1, "the malformed event was dropped");
+  assert.equal(sent[0].body.batch[0].event, "syg_check");
+  assert.ok(sent[0].signal instanceof AbortSignal, "the request to PostHog has a time limit");
 
   const bad = new Request("https://api.syg.vishisht.tech/v1/events", { method: "POST", body: "not json" });
   assert.equal((await events(bad, { env: {}, waitUntil: () => {}, get })).status, 400);
@@ -82,7 +89,7 @@ test("events: a PostHog failure is silent", async () => {
   await Promise.all(waits); // resolves: a lost batch is not an error
 });
 
-test("version: the latest release, and the check counted as an event", async () => {
+test("version: the latest release, and the check counted as an event of its own", async () => {
   const sent = [];
   const get = async (url, init) => {
     if (url.startsWith("https://github.com/")) return github("https://github.com/Vishisht16/Syg/releases/tag/v1.0.1")(url, init);
@@ -96,8 +103,11 @@ test("version: the latest release, and the check counted as an event", async () 
   assert.equal(r.headers.get("cache-control"), "no-store");
   await Promise.all(waits);
   assert.equal(sent.length, 1);
-  assert.equal(sent[0].batch[0].event, "syg_version");
-  assert.equal(sent[0].batch[0].properties.os, "darwin");
+  const check = sent[0].batch[0];
+  assert.equal(check.event, "syg_update_check", "not syg_version, which is someone running `syg version`");
+  assert.equal(check.properties.os, "darwin");
+  assert.match(check.distinct_id, /^anon-/);
+  assert.equal(check.properties.$process_person_profile, false);
 });
 
 test("latest: no release, a pre-release, or GitHub unreachable", async () => {

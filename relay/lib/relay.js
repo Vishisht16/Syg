@@ -7,8 +7,8 @@
 //                     Anything else is discarded.
 //   GET  /v1/version  {"latest": "X.Y.Z"}, for the CLI's daily update check:
 //                     the newest release of github.com/vishisht16/syg that is
-//                     not a pre-release. It counts as an event too (version,
-//                     OS and architecture only).
+//                     not a pre-release. It counts as an event too,
+//                     syg_update_check (version, OS and architecture only).
 //
 // Its one setting is POSTHOG_KEY, the PostHog project's API key. POSTHOG_HOST
 // overrides the PostHog region.
@@ -31,12 +31,17 @@ const FEATURES = ["environments", "extern", "imports", "policy", "profiles", "ra
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const CODE = /^CHK-[A-Z0-9]+(-[A-Z0-9]+)*-\d{3}$/;
 const VERSION = /^\d{1,4}\.\d{1,4}\.\d{1,4}(-[a-z0-9.]{1,20})?$/;
-const FUNC = /^[A-Za-z0-9_./()*-]{1,120}$/;
+// A function name as Go's runtime reports it: pkg.(*T).Method, a closure's
+// func1, or a generic function's F[...].
+const FUNC = /^[A-Za-z0-9_./()*[\]-]{1,120}$/;
 const MAX_BATCH = 200;
 
 const POSTHOG_HOST = "https://eu.i.posthog.com";
 const RELEASES = "https://github.com/vishisht16/syg/releases";
 const HOUR = 60 * 60 * 1000;
+// POSTHOG_TIMEOUT bounds the request to PostHog, so one that hangs cannot keep
+// the function running.
+const POSTHOG_TIMEOUT = 5000;
 
 // clean returns the event reduced to allowed fields and values, or null.
 export function clean(e) {
@@ -81,28 +86,30 @@ export function clean(e) {
   return out;
 }
 
-// toPostHog shapes a clean event for PostHog's batch API. The distinct ID is
-// the installation's random ID, or, in CI, the event's own: CI runs are not
-// people, and are not joined up.
-export function toPostHog(e) {
+// toPostHog shapes a clean event for PostHog's batch API, named syg_COMMAND
+// unless given a name. The distinct ID is the installation's random ID, or,
+// for an event that has none (a CI run, an update check), the event's own:
+// those are not people, and are not joined up.
+export function toPostHog(e, name = "syg_" + e.command) {
   const { event_id, id, time, ...props } = e;
   return {
-    event: "syg_" + e.command,
+    event: name,
     uuid: event_id,
-    distinct_id: id || "ci-" + event_id,
+    distinct_id: id || "anon-" + event_id,
     timestamp: time ? new Date(time * 1000).toISOString() : undefined,
     properties: { ...props, $ip: null, $geoip_disable: true, $process_person_profile: Boolean(id) },
   };
 }
 
-// forward sends clean events to PostHog. It never rejects: a failure only
-// loses the batch.
-function forward(env, list, get) {
+// forward sends clean events to PostHog, under the name given, if any. It
+// never rejects: a failure only loses the batch.
+function forward(env, list, get, name) {
   if (!env.POSTHOG_KEY || list.length === 0) return Promise.resolve();
   return get((env.POSTHOG_HOST || POSTHOG_HOST) + "/batch/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ api_key: env.POSTHOG_KEY, batch: list.map(toPostHog) }),
+    body: JSON.stringify({ api_key: env.POSTHOG_KEY, batch: list.map((e) => toPostHog(e, name)) }),
+    signal: AbortSignal.timeout(POSTHOG_TIMEOUT),
   }).then(
     () => {},
     () => {},
@@ -148,7 +155,7 @@ export async function version(req, { env = process.env, waitUntil, get = fetch, 
     schema: 1, event_id: crypto.randomUUID(), version: VERSION.test(v) ? v : "0.0.0",
     command: "version", ci: "none", os: q.get("os"), arch: q.get("arch"),
   });
-  if (ping) waitUntil(forward(env, [ping], get));
+  if (ping) waitUntil(forward(env, [ping], get, "syg_update_check"));
   const newest = await latest({ get, memo });
   return Response.json(newest ? { latest: newest } : {}, { headers: { "Cache-Control": "no-store" } });
 }
