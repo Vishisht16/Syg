@@ -9,6 +9,6 @@
     "test": "node --test"
   },
   "dependencies": {
-    "@vercel/functions": "3.9.11"
+    "@vercel/functions": "3.10.1"
   }
 }
