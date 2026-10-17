@@ -277,6 +277,7 @@ jobs:
           t="ghcr.io/vishisht16/syg:$v"
           case "$v" in *-*) ;; *) t="$t,ghcr.io/vishisht16/syg:latest,ghcr.io/vishisht16/syg:${v%%.*}" ;; esac
           echo "tags=$t" >> "$GITHUB_OUTPUT"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
@@ -285,7 +286,7 @@ jobs:
           tags: ${{ steps.tags.outputs.tags }}
           labels: |
             org.opencontainers.image.source=https://github.com/vishisht16/syg
-            org.opencontainers.image.version=${{ env.TAG }}
+            org.opencontainers.image.version=${{ steps.tags.outputs.version }}
 
   # The documentation of a final release: committed to docs/ here, and published
   # at syg.vishisht.tech with the install scripts beside it. A pre-release
