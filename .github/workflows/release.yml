@@ -137,6 +137,12 @@ jobs:
               VERSION="$version" ARCH="$arch" "$(go env GOPATH)/bin/nfpm" package -f nfpm.yaml -p "$fmt" -t dist/
             done
           done
+          # A pre-release's packages are versioned 1.0.0~rc.1, and GitHub names
+          # such an asset with "." for "~". Named that way here, before they are
+          # checksummed and signed; the version inside the package is unchanged.
+          for f in dist/*~*; do
+            if [ -e "$f" ]; then mv "$f" "$(printf '%s' "$f" | tr '~' '.')"; fi
+          done
       - name: checksums
         run: cd dist && sha256sum syg_* syg-* > SHA256SUMS && cat SHA256SUMS
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
