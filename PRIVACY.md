@@ -49,9 +49,10 @@ The relay's code is public, in
 
 - Never in a development build.
 - Outside CI, never before the one-line notice has been shown on a terminal.
-- In the background: a command queues its event in your config directory, and
-  a later command sends the queue, giving up after two seconds. Nothing waits
-  for it, and a failure is silent.
+- In the background: a command adds its event to a queue in your config
+  directory and, at most once an hour, starts `syg telemetry send`, a separate
+  process that sends the queue and exits, giving up after two seconds. No
+  command waits for it, and a failure is silent.
 - In CI, which has no later run, at exit, waiting at most 250 ms.
 
 ## Turning it off
@@ -66,6 +67,7 @@ Any of these turns it off; nothing is sent, queued or checked:
 
 ## The update check
 
-At most once a day, outside CI, Syg asks the relay for the latest release,
-sending its version, OS and architecture, and prints a one-line notice on a
-terminal when a newer one exists. It is off whenever telemetry is.
+At most once a day, outside CI, `syg telemetry send` also asks the relay for
+the latest release, sending Syg's version, OS and architecture. When a newer
+one exists, a later command prints a one-line notice on a terminal. It is off
+whenever telemetry is.
