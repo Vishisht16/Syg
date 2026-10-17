@@ -98,7 +98,8 @@ nothing.
 - [Migrating](https://syg.vishisht.tech/migrate-helm.html) from Helm,
   Kustomize or plain YAML.
 
-`syg explain NAME` explains any finding offline.
+The same documentation is in [`docs/`](docs/README.md), and `syg explain NAME`
+explains any finding offline.
 
 ## What Syg will not do
 
