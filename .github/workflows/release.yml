@@ -8,13 +8,15 @@ name: release
 #   - Runs on a tag or by hand, never on a pull request: a fork's workflow
 #     never sees the secrets, and no outside change runs here.
 #   - The core checkout uses CORE_READ_TOKEN (read-only, one repository),
-#     available only to the `release` environment, which needs approval.
+#     available only to the `release` environment, which needs approval. It
+#     is quiet: git's detached-HEAD message would print the commit's subject.
 #   - No caches (a pull request could read a cache), and every upload names
 #     its files explicitly: only dist/ and the documentation, which is
 #     published, ever leave the runner.
 #   - Tests run quietly: hack/quiet-test.py prints how many packages passed,
 #     never a test's output, a stack trace or a package name. Failures are
-#     read in the private repository's CI, which runs the same tests.
+#     read in the CI (vishisht16/syg-ci), which runs the same tests and keeps
+#     their output encrypted.
 #   - No verbose build flags; the checkout is deleted when the job ends.
 #   - Third-party actions are pinned by commit.
 #   - Syg's own runs here send no usage statistics (SYG_TELEMETRY=off).
@@ -63,13 +65,16 @@ jobs:
         with:
           persist-credentials: false
       - name: check out the source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: vishisht16/syg-core
-          ref: ${{ env.TAG }}
-          token: ${{ secrets.CORE_READ_TOKEN }}
-          path: core
-          persist-credentials: false
+        # The token is used for this fetch alone, and not kept.
+        env:
+          CORE_READ_TOKEN: ${{ secrets.CORE_READ_TOKEN }}
+        run: |
+          basic=$(printf 'x-access-token:%s' "$CORE_READ_TOKEN" | base64 | tr -d '\n')
+          echo "::add-mask::$basic"
+          git -c init.defaultBranch=main init -q core
+          git -C core -c "http.extraheader=AUTHORIZATION: basic $basic" \
+            fetch -q --depth 1 --no-tags https://github.com/Vishisht16/Syg-Core.git "refs/tags/$TAG"
+          git -C core -c advice.detachedHead=false checkout -q FETCH_HEAD
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: core/go.mod
