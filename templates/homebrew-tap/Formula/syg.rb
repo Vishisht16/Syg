@@ -32,6 +32,8 @@ class Syg < Formula
   end
 
   test do
+    # Testing the formula is not using Syg: no usage statistics.
+    ENV["SYG_TELEMETRY"] = "off"
     assert_match "syg #{version}", shell_output("#{bin}/syg version")
     (testpath/"new").mkpath
     system bin/"syg", "init", testpath/"new/app", "--service", "api"

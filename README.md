@@ -76,7 +76,6 @@ through declared relations.
 $ brew install vishisht16/tap/syg                       # macOS, Linux
 $ curl -fsSL https://syg.vishisht.tech/install.sh | sh  # macOS, Linux
 > scoop bucket add syg https://github.com/vishisht16/syg; scoop install syg   # Windows
-> winget install Vishisht.Syg                           # Windows
 ```
 
 In GitHub Actions, `uses: vishisht16/setup-syg@v1`; anywhere else, the image
