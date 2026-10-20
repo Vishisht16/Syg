@@ -50,7 +50,7 @@ case $kind in
     basic=$(printf 'x-access-token:%s' "$TAP_TOKEN" | base64 | tr -d '\n')
     echo "::add-mask::$basic"
     auth=(-c "http.extraheader=AUTHORIZATION: basic $basic")
-    git "${auth[@]}" clone -q https://github.com/vishisht16/homebrew-tap.git tap
+    git "${auth[@]}" clone -q https://github.com/Vishisht16/homebrew-tap.git tap
     mkdir -p tap/Formula
     python3 hack/render.py brew "$version" "$sums" > tap/Formula/syg.rb
     cd tap
