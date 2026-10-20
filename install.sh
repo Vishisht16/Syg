@@ -30,13 +30,15 @@ fetch() { # fetch URL FILE
   else die "needs curl or wget"; fi
 }
 
-# latest prints the newest release's version. It reads where
-# github.com/REPO/releases/latest redirects to, which, unlike GitHub's API,
-# has no hourly limit per address; SYG_API names an API response instead (the
-# tests use one).
+# latest prints the newest release's version, and returns 2 when there is
+# none yet, only release candidates, which releases/latest skips. It reads
+# where github.com/REPO/releases/latest redirects to, which, unlike GitHub's
+# API, has no hourly limit per address; SYG_API names an API response instead
+# (the tests use one).
 latest() {
   if [ -n "${SYG_API:-}" ]; then
     fetch "$SYG_API" "$tmp/latest.json" || return 1
+    grep -q '"tag_name"' "$tmp/latest.json" || return 2
     sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' "$tmp/latest.json" | head -n 1
     return 0
   fi
@@ -46,7 +48,11 @@ latest() {
   else
     url="$(wget -S --spider "$url" 2>&1 | sed -n 's/^ *[Ll]ocation: *//p' | tail -n 1 | tr -d '\r')"
   fi
-  case "$url" in */releases/tag/v*) printf '%s\n' "${url##*/releases/tag/v}" ;; esac
+  case "$url" in
+    */releases/tag/v*) printf '%s\n' "${url##*/releases/tag/v}" ;;
+    */releases | */releases/) return 2 ;; # where it leads with no release yet
+    *) return 1 ;;
+  esac
 }
 
 # verify_signature checks the archive's cosign signature when cosign 3 or newer
@@ -85,8 +91,13 @@ main() {
 
   version="${SYG_VERSION:-}"
   if [ -z "$version" ]; then
-    version="$(latest)" || version=""
-    [ -n "$version" ] || die "could not find the latest release"
+    found=0
+    version="$(latest)" || found=$?
+    case "$found" in
+      0) [ -n "$version" ] || die "could not find the latest release" ;;
+      2) die "Syg has no final release yet, only release candidates: install one with SYG_VERSION=VERSION, from https://github.com/$REPO/releases" ;;
+      *) die "could not reach GitHub to find the latest release" ;;
+    esac
   fi
   version="${version#v}"
 

@@ -23,6 +23,10 @@ if (-not $version) {
     $req.Method = "HEAD"
     $res = $req.GetResponse()
     try { $location = $res.Headers["Location"] } finally { $res.Close() }
+    if ($location -match "/releases/?$") {
+        # Where it leads when there is no release yet, only release candidates.
+        throw "Syg has no final release yet, only release candidates: install one with `$env:SYG_VERSION = `"VERSION`", from https://github.com/$repo/releases"
+    }
     if ($location -notmatch "/releases/tag/v([^/?#]+)$") { throw "could not find the latest release" }
     $version = $Matches[1]
 }

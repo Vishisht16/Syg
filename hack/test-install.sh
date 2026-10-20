@@ -1,8 +1,9 @@
 #!/bin/sh
 # Tests install.sh against a fake release served from a directory (file://): a
-# good install, a version pin, a checksum mismatch, a missing archive, and the
-# signature check with a stand-in cosign (older than the script checks with; a
-# signature that verifies; one that does not; none at all).
+# good install, a version pin, a checksum mismatch, a missing archive, no final
+# release yet, and the signature check with a stand-in cosign (older than the
+# script checks with; a signature that verifies; one that does not; none at
+# all).
 #   sh hack/test-install.sh PATH-TO-A-SYG-BINARY
 set -eu
 bin="$1"
@@ -68,4 +69,10 @@ grep -q "checksum mismatch" "$work/log" || fail "a mismatch was not reported as 
 if SYG_VERSION=4.5.6 SYG_INSTALL_DIR="$work/d" sh "$here/install.sh" 2>"$work/log"; then fail "a missing release installed"; fi
 grep -q "no release archive" "$work/log" || fail "a missing release was not reported"
 
-echo "test-install: PASS: install, version pin, signature (old cosign, verified, bad, missing), checksum mismatch, missing release"
+# Only release candidates: GitHub's latest release is none, and the installer
+# says how to install a candidate instead.
+printf '{"message": "Not Found"}' > "$work/none.json"
+if SYG_API="file://$work/none.json" SYG_INSTALL_DIR="$work/h" sh "$here/install.sh" 2>"$work/log"; then fail "an install with no release succeeded"; fi
+if ! grep -q "no final release yet.*SYG_VERSION" "$work/log"; then cat "$work/log"; fail "no release was not explained"; fi
+
+echo "test-install: PASS: install, version pin, signature (old cosign, verified, bad, missing), checksum mismatch, missing release, no final release yet"
