@@ -29,6 +29,9 @@ class Syg < Formula
 
   def install
     bin.install "syg"
+    # What comes with it: the EULA, the privacy statement and the notices of
+    # the components it includes.
+    prefix.install Dir["*.md", "*.txt"]
   end
 
   test do

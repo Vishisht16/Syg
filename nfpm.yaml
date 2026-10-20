@@ -18,3 +18,5 @@ contents:
     dst: /usr/share/doc/syg/EULA.md
   - src: PRIVACY.md
     dst: /usr/share/doc/syg/PRIVACY.md
+  - src: THIRD_PARTY_NOTICES.txt
+    dst: /usr/share/doc/syg/THIRD_PARTY_NOTICES.txt
