@@ -117,6 +117,8 @@ jobs:
           "$RUNNER_TEMP/syg-docs" docs build -o ../site
           "$RUNNER_TEMP/syg-docs" docs build --markdown -o ../docs-md
           cp CHANGELOG.md ../docs-md/CHANGELOG.md
+          # Every rule's docs_url, for publish-docs to find on the deployed site.
+          "$RUNNER_TEMP/syg-docs" rules --json | jq -r '.[].docs_url' > ../docs-urls.txt
       - name: remove the source
         if: always()
         run: rm -rf core
@@ -175,6 +177,7 @@ jobs:
           path: |
             site/
             docs-md/
+            docs-urls.txt
           if-no-files-found: error
 
   # What a user does: download, verify, run, on each OS, from the archive.

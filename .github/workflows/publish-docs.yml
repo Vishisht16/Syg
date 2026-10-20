@@ -1,11 +1,11 @@
 name: publish-docs
 
 # Publishes the documentation a build made, the `docs` artifact of the calling
-# run (site/ and docs-md/), for release.yml and docs.yml: the Markdown is
-# committed to docs/ here, with the changelog, the EULA and the privacy
-# statement at the root, and the site is deployed to syg.vishisht.tech with the
-# install scripts beside it. Without `publish`, the site is only packaged for
-# Pages, which still tests the path.
+# run (site/, docs-md/ and docs-urls.txt), for release.yml and docs.yml: the
+# Markdown is committed to docs/ here, with the changelog, the EULA and the
+# privacy statement at the root, and the site is deployed to syg.vishisht.tech
+# with the install scripts beside it, then checked there. Without `publish`,
+# the site is only packaged for Pages, which still tests the path.
 on:
   workflow_call:
     inputs:
@@ -77,3 +77,20 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+  # The site now served is the one built, and every rule's docs_url finds its
+  # section there. A page that answers 200 can still be an older build,
+  # without the section a newer rule links to (hack/check-site.sh).
+  verify:
+    needs: deploy
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: docs
+          path: built
+      - name: the deployed site is the one built
+        run: bash hack/check-site.sh https://syg.vishisht.tech built

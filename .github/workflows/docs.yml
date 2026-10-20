@@ -68,6 +68,8 @@ jobs:
           "$RUNNER_TEMP/syg-docs" docs build -o ../site
           "$RUNNER_TEMP/syg-docs" docs build --markdown -o ../docs-md
           cp CHANGELOG.md ../docs-md/CHANGELOG.md
+          # Every rule's docs_url, for publish-docs to find on the deployed site.
+          "$RUNNER_TEMP/syg-docs" rules --json | jq -r '.[].docs_url' > ../docs-urls.txt
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "the documentation, for $version"
       - name: remove the source
@@ -79,6 +81,7 @@ jobs:
           path: |
             site/
             docs-md/
+            docs-urls.txt
           if-no-files-found: error
 
   publish:
