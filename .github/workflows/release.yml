@@ -327,28 +327,8 @@ jobs:
           name: dist
           path: dist
       - name: Scoop
-        run: |
-          python3 hack/render.py scoop "${TAG#v}" dist/SHA256SUMS > bucket/syg.json
-          git config user.name "syg-release"
-          git config user.email "syg-release@users.noreply.github.com"
-          git add bucket/syg.json
-          git diff --cached --quiet || git commit -m "Scoop: syg ${TAG#v}"
-          # The docs job pushes to main at the same time: rebase and retry.
-          for _ in 1 2 3; do
-            if git pull --rebase -q origin main && git push -q origin HEAD:main; then exit 0; fi
-            sleep 5
-          done
-          exit 1
+        run: bash hack/channels.sh scoop "${TAG#v}" dist/SHA256SUMS main
       - name: Homebrew
         env:
           TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
-        run: |
-          git clone "https://x-access-token:${TAP_TOKEN}@github.com/vishisht16/homebrew-tap.git" tap
-          mkdir -p tap/Formula
-          python3 hack/render.py brew "${TAG#v}" dist/SHA256SUMS > tap/Formula/syg.rb
-          cd tap
-          git config user.name "syg-release"
-          git config user.email "syg-release@users.noreply.github.com"
-          git add Formula/syg.rb
-          git diff --cached --quiet || git commit -m "syg ${TAG#v}"
-          git push origin HEAD
+        run: bash hack/channels.sh brew "${TAG#v}" dist/SHA256SUMS main
