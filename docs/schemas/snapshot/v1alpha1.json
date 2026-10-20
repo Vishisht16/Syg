@@ -1,0 +1,213 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://syg.vishisht.tech/schemas/snapshot/v1alpha1.json",
+  "title": "Syg cluster snapshot (syg.vishisht.tech/v1alpha1 ClusterSnapshot)",
+  "description": "The facts Tier-2 checks need about a cluster (SRS §12, SNAP-002). Written by `syg snapshot`; holds no secret values and no node names (SNAP-003).",
+  "type": "object",
+  "required": ["apiVersion", "kind", "cluster", "apis", "nodes", "cni"],
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {"const": "syg.vishisht.tech/v1alpha1"},
+    "kind": {"const": "ClusterSnapshot"},
+    "cluster": {
+      "type": "object",
+      "required": ["id", "kubernetesVersion", "capturedAt", "secretKeys"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "description": "the kube-system namespace's UID"},
+        "kubernetesVersion": {"type": "string", "pattern": "^v[0-9]+\\.[0-9]+"},
+        "capturedAt": {"type": "string", "format": "date-time"},
+        "secretKeys": {"type": "boolean"}
+      }
+    },
+    "apis": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["groupVersion", "kinds"],
+        "additionalProperties": false,
+        "properties": {
+          "groupVersion": {"type": "string"},
+          "kinds": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "crds": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "group", "kind", "scope", "versions"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {"type": "string"},
+          "group": {"type": "string"},
+          "kind": {"type": "string"},
+          "scope": {"enum": ["Namespaced", "Cluster"]},
+          "versions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "served", "storage"],
+              "additionalProperties": false,
+              "properties": {
+                "name": {"type": "string"},
+                "served": {"type": "boolean"},
+                "storage": {"type": "boolean"},
+                "deprecated": {"type": "boolean"},
+                "schema": {"type": "object"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "storageClasses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "provisioner"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {"type": "string"},
+          "provisioner": {"type": "string"},
+          "default": {"type": "boolean"},
+          "volumeBindingMode": {"type": "string"},
+          "accessModes": {"type": "array", "items": {"enum": ["ReadWriteOnce", "ReadOnlyMany", "ReadWriteMany", "ReadWriteOncePod"]}}
+        }
+      }
+    },
+    "ingressClasses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "controller"],
+        "additionalProperties": false,
+        "properties": {"name": {"type": "string"}, "controller": {"type": "string"}, "default": {"type": "boolean"}}
+      }
+    },
+    "gatewayClasses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "controller", "accepted"],
+        "additionalProperties": false,
+        "properties": {"name": {"type": "string"}, "controller": {"type": "string"}, "accepted": {"type": "boolean"}}
+      }
+    },
+    "gateways": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["namespace", "name", "class", "listeners"],
+        "additionalProperties": false,
+        "properties": {
+          "namespace": {"type": "string"},
+          "name": {"type": "string"},
+          "class": {"type": "string"},
+          "listeners": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "object",
+              "required": ["name", "protocol", "port", "allowedFrom"],
+              "additionalProperties": false,
+              "properties": {
+                "name": {"type": "string"},
+                "protocol": {"type": "string"},
+                "port": {"type": "integer"},
+                "hostname": {"type": "string"},
+                "allowedFrom": {"enum": ["Same", "All", "Selector"]}
+              }
+            }
+          }
+        }
+      }
+    },
+    "nodes": {
+      "type": "object",
+      "required": ["count", "allocatable", "largestNode"],
+      "additionalProperties": false,
+      "properties": {
+        "count": {"type": "integer", "minimum": 0},
+        "zones": {"type": "object", "additionalProperties": {"type": "integer"}},
+        "labelKeys": {"type": "array", "items": {"type": "string"}},
+        "domains": {"type": "object", "additionalProperties": {"type": "integer"}},
+        "untaintedDomains": {"type": "object", "additionalProperties": {"type": "integer"}},
+        "taints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["key", "effect", "nodes"],
+            "additionalProperties": false,
+            "properties": {"key": {"type": "string"}, "value": {"type": "string"}, "effect": {"type": "string"}, "nodes": {"type": "integer"}}
+          }
+        },
+        "allocatable": {"$ref": "#/$defs/resources"},
+        "largestNode": {"$ref": "#/$defs/resources"}
+      }
+    },
+    "cni": {
+      "type": "object",
+      "required": ["name", "enforcesNetworkPolicy"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string"},
+        "enforcesNetworkPolicy": {"type": ["boolean", "null"]},
+        "evidence": {"type": "string"}
+      }
+    },
+    "namespaces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "secretsListed"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {"type": "string"},
+          "services": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name"],
+              "additionalProperties": false,
+              "properties": {
+                "name": {"type": "string"},
+                "ports": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["port", "protocol"],
+                    "additionalProperties": false,
+                    "properties": {"name": {"type": "string"}, "port": {"type": "integer"}, "protocol": {"type": "string"}}
+                  }
+                }
+              }
+            }
+          },
+          "configMaps": {"type": "array", "items": {"$ref": "#/$defs/keyedName"}},
+          "secretsListed": {"type": "boolean"},
+          "secrets": {"type": "array", "items": {"$ref": "#/$defs/keyedName"}},
+          "serviceAccounts": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "resources": {
+      "type": "object",
+      "required": ["cpu", "memory", "pods"],
+      "additionalProperties": false,
+      "properties": {"cpu": {"type": "string"}, "memory": {"type": "string"}, "pods": {"type": "string"}}
+    },
+    "keyedName": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string"},
+        "type": {"type": "string"},
+        "keys": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}

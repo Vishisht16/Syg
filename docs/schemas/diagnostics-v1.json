@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://syg.vishisht.tech/schemas/diagnostics-v1.json",
+  "title": "syg check --format json",
+  "description": "The diagnostics `syg check` and `syg build` write with --format json (CLI-Check-001, DIAG-001): one array, in the order the text format prints them. Fields are added, never renamed or removed, within a major version (docs/compatibility.md).",
+  "type": "array",
+  "items": { "$ref": "#/definitions/diagnostic" },
+  "definitions": {
+    "diagnostic": {
+      "type": "object",
+      "required": ["severity", "code", "summary", "position"],
+      "additionalProperties": false,
+      "properties": {
+        "severity": {
+          "enum": ["error", "warning", "info"],
+          "description": "error fails the command (exit 1); warning fails it under --strict; info never does (CHK-Sev-001)."
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A rule ID (CHK-…), or a compiler phase for a finding that is not a rule (syntax, resolve, type, …). `syg explain CODE` documents every one."
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)+$",
+          "description": "The rule's readable name (budget-blocks-eviction), which `syg explain` and syg.yaml accept beside the code. Absent for a finding that is not a rule's."
+        },
+        "summary": { "type": "string", "minLength": 1 },
+        "position": {
+          "$ref": "#/definitions/position",
+          "description": "The primary span. A finding about the module as a whole has an empty file and zero positions."
+        },
+        "secondary": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["message", "position"],
+            "additionalProperties": false,
+            "properties": {
+              "message": { "type": "string" },
+              "position": { "$ref": "#/definitions/position" }
+            }
+          },
+          "description": "Related spans, each with what it contributes (DIAG-003)."
+        },
+        "consequence": { "type": "string", "description": "What fails in production, and how (DIAG-004)." },
+        "suggestion": { "type": "string", "description": "The computable fix, when there is one (DIAG-005)." },
+        "explain": { "type": "string", "description": "The `syg explain` topic for this finding." },
+        "environment": { "type": "string", "description": "The environment the finding is in; absent for the base module." },
+        "snapshot": { "type": "string", "description": "For a Tier-2 finding, the snapshot it was checked against." }
+      }
+    },
+    "position": {
+      "type": "object",
+      "required": ["file", "line", "column", "end_line", "end_column"],
+      "additionalProperties": false,
+      "properties": {
+        "file": { "type": "string", "description": "As the module was named on the command line; empty when the finding has no location." },
+        "line": { "type": "integer", "minimum": 0, "description": "1-based; 0 only when file is empty." },
+        "column": { "type": "integer", "minimum": 0, "description": "1-based, counting bytes." },
+        "end_line": { "type": "integer", "minimum": 0 },
+        "end_column": { "type": "integer", "minimum": 0, "description": "Exclusive." }
+      }
+    }
+  }
+}
