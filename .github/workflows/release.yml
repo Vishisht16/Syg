@@ -42,10 +42,12 @@ env:
   SYG_TELEMETRY: "off"
   TAG: ${{ github.event.inputs.tag || github.ref_name }}
 
+# The Ubuntu jobs run on 24.04, not ubuntu-latest, which moves to 26.04 in
+# November 2026: what builds a release changes only when this file does.
 jobs:
   # Before anyone is asked to approve: the tag must name a release.
   tag:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions: {}
     steps:
       - name: check the tag
@@ -55,7 +57,7 @@ jobs:
 
   build:
     needs: tag
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: release
     permissions:
       contents: read
@@ -182,7 +184,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {runner: ubuntu-latest, os: linux, arch: amd64}
+          - {runner: ubuntu-24.04, os: linux, arch: amd64}
           - {runner: ubuntu-24.04-arm, os: linux, arch: arm64}
           - {runner: macos-latest, os: darwin, arch: arm64}
           - {runner: macos-latest, os: darwin, arch: amd64}  # under Rosetta
@@ -227,7 +229,7 @@ jobs:
 
   publish:
     needs: smoke
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
@@ -249,7 +251,7 @@ jobs:
 
   image:
     needs: publish
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
@@ -315,7 +317,7 @@ jobs:
   channels:
     needs: publish
     if: ${{ !contains(github.event.inputs.tag || github.ref_name, '-') }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
