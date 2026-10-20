@@ -19,8 +19,10 @@ attempts=${CHECK_SITE_ATTEMPTS:-25}
 base=${1:?usage: check-site.sh BASE DIR}
 dir=${2:?usage: check-site.sh BASE DIR}
 base=${base%/}
-[ -d "$dir/site" ] && [ -s "$dir/docs-urls.txt" ] \
-  || { echo "::error::$dir holds no site/ and docs-urls.txt"; exit 1; }
+if [ ! -d "$dir/site" ] || [ ! -s "$dir/docs-urls.txt" ]; then
+  echo "::error::$dir holds no site/ and docs-urls.txt"
+  exit 1
+fi
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
