@@ -7,9 +7,10 @@ name: release
 # Guardrails, so that no source reaches this repository or its logs:
 #   - Runs on a tag or by hand, never on a pull request: a fork's workflow
 #     never sees the secrets, and no outside change runs here.
-#   - The core checkout uses CORE_READ_TOKEN (read-only, one repository),
-#     available only to the `release` environment, which needs approval. It
-#     is quiet: git's detached-HEAD message would print the commit's subject.
+#   - The core checkout (hack/checkout-core.sh) uses CORE_READ_TOKEN
+#     (read-only, one repository), available only to the `release`
+#     environment, which needs approval. It is quiet: git's detached-HEAD
+#     message would print the commit's subject.
 #   - No caches (a pull request could read a cache), and every upload names
 #     its files explicitly: only dist/ and the documentation, which is
 #     published, ever leave the runner.
@@ -65,16 +66,9 @@ jobs:
         with:
           persist-credentials: false
       - name: check out the source
-        # The token is used for this fetch alone, and not kept.
         env:
           CORE_READ_TOKEN: ${{ secrets.CORE_READ_TOKEN }}
-        run: |
-          basic=$(printf 'x-access-token:%s' "$CORE_READ_TOKEN" | base64 | tr -d '\n')
-          echo "::add-mask::$basic"
-          git -c init.defaultBranch=main init -q core
-          git -C core -c "http.extraheader=AUTHORIZATION: basic $basic" \
-            fetch -q --depth 1 --no-tags https://github.com/Vishisht16/Syg-Core.git "refs/tags/$TAG"
-          git -C core -c advice.detachedHead=false checkout -q FETCH_HEAD
+        run: bash hack/checkout-core.sh "refs/tags/$TAG"
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: core/go.mod
@@ -295,48 +289,17 @@ jobs:
 
   # The documentation of a final release: committed to docs/ here, and published
   # at syg.vishisht.tech with the install scripts beside it. A pre-release
-  # builds and packages the site the same way, and publishes nothing.
+  # packages the site the same way, and publishes nothing.
   docs:
     needs: publish
-    runs-on: ubuntu-latest
     permissions:
       contents: write
       pages: write
       id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: docs
-          path: built
-      - name: commit the docs
-        if: ${{ !contains(env.TAG, '-') }}
-        run: |
-          rm -rf docs && mv built/docs-md docs
-          cp docs/CHANGELOG.md CHANGELOG.md
-          cp docs/eula.md EULA.md
-          cp docs/privacy.md PRIVACY.md
-          git config user.name "syg-release"
-          git config user.email "syg-release@users.noreply.github.com"
-          git add docs CHANGELOG.md EULA.md PRIVACY.md
-          git diff --cached --quiet || git commit -m "Docs for ${TAG}"
-          # The Scoop job pushes to main at the same time: rebase and retry.
-          for _ in 1 2 3; do
-            if git pull --rebase -q origin main && git push -q origin HEAD:main; then exit 0; fi
-            sleep 5
-          done
-          exit 1
-      - name: the site's extra files
-        run: cp install.sh install.ps1 built/site/
-      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
-        with:
-          path: built/site
-      - id: deployment
-        if: ${{ !contains(env.TAG, '-') }}
-        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+    uses: ./.github/workflows/publish-docs.yml
+    with:
+      publish: ${{ !contains(github.event.inputs.tag || github.ref_name, '-') }}
+      message: Docs for ${{ github.event.inputs.tag || github.ref_name }}
 
   channels:
     needs: publish

@@ -18,7 +18,7 @@ jobs:
         with:
           persist-credentials: false
       - name: shellcheck
-        run: shellcheck install.sh hack/test-install.sh
+        run: shellcheck install.sh hack/test-install.sh hack/checkout-core.sh
       - name: the relay
         run: node --test relay/relay.test.js
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
