@@ -8,12 +8,13 @@
 # the docs_url of every rule, which each finding and `syg explain` print. A
 # page can answer 200 and still be an older build, without a section a newer
 # rule links to, so each deployed file is compared with the built one, byte
-# for byte (dotfiles aside: Pages does not serve them), and each address's
-# section is looked for by its id. The pages the binary and the installers
-# name are asked for too, and the install scripts compared with this
-# repository's. Pages's CDN keeps a page for up to ten minutes, so each
-# attempt asks with a query of its own, and a failure is retried for twelve
-# minutes (CHECK_SITE_ATTEMPTS, 30 s apart) before it fails the run.
+# for byte, and each address's section is looked for by its id. The pages the
+# binary and the installers name are asked for too, and the install scripts
+# compared with this repository's. security.txt, which publish-docs writes
+# beside the built files, must name a contact and not have expired. Pages's
+# CDN keeps a page for up to ten minutes, so each attempt asks with a query
+# of its own, and a failure is retried for twelve minutes
+# (CHECK_SITE_ATTEMPTS, 30 s apart) before it fails the run.
 set -euo pipefail
 attempts=${CHECK_SITE_ATTEMPTS:-25}
 base=${1:?usage: check-site.sh BASE DIR}
@@ -50,6 +51,16 @@ check() {
   for p in install privacy eula; do
     curl -fsS --max-time 30 -o /dev/null "$base/$p$q" 2>/dev/null || echo "missing: $base/$p"
   done
+  if ! curl -fsS --max-time 30 -o "$work/security.txt" "$base/.well-known/security.txt$q" 2>/dev/null; then
+    echo "missing: $base/.well-known/security.txt"
+  elif ! grep -q '^Contact: https://' "$work/security.txt"; then
+    echo "names no Contact: $base/.well-known/security.txt"
+  else
+    expires=$(sed -n 's/^Expires: //p' "$work/security.txt")
+    if [ -z "$expires" ] || [ "$(date -u -d "$expires" +%s 2>/dev/null || echo 0)" -le "$(date -u +%s)" ]; then
+      echo "expired, or no Expires: $base/.well-known/security.txt"
+    fi
+  fi
   for p in install.sh install.ps1; do
     if ! curl -fsS --max-time 30 -o "$work/got" "$base/$p$q" 2>/dev/null; then
       echo "missing: $base/$p"

@@ -56,9 +56,24 @@ jobs:
           exit 1
       - name: the install scripts, at the site's root
         run: cp install.sh install.ps1 built/site/
+      - name: security.txt
+        # RFC 9116: where to report a vulnerability. It expires within a
+        # year, so each publish writes it afresh.
+        run: |
+          mkdir -p built/site/.well-known
+          cat > built/site/.well-known/security.txt <<EOF
+          Contact: https://github.com/vishisht16/syg/security/advisories/new
+          Expires: $(date -u -d '+364 days' +%Y-%m-%dT00:00:00Z)
+          Policy: https://github.com/vishisht16/syg/security/policy
+          Preferred-Languages: en
+          Canonical: https://syg.vishisht.tech/.well-known/security.txt
+          EOF
+          sed -i 's/^ *//' built/site/.well-known/security.txt
+          cat built/site/.well-known/security.txt
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: built/site
+          include-hidden-files: true
 
   deploy:
     needs: package

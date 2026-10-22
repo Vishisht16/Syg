@@ -17,9 +17,11 @@ set -eu
 REPO="vishisht16/syg"
 BASE="${SYG_DOWNLOAD_BASE:-https://github.com/$REPO/releases/download}"
 DIR="${SYG_INSTALL_DIR:-$HOME/.local/bin}"
-# The certificate a release's signature must carry: this repository's release
-# workflow, and nothing else.
-IDENTITY='(?i)^https://github\.com/vishisht16/syg/\.github/workflows/release\.yml@refs/(heads/main|tags/v.+)$'
+# The certificate a release's signature must carry: this repository's build
+# workflow, and nothing else. Releases up to 1.0.0-rc.3 were signed by the
+# release workflow itself.
+IDENTITY='(?i)^https://github\.com/vishisht16/syg/\.github/workflows/build\.yml@refs/(heads/main|tags/v.+)$'
+EARLY_IDENTITY='(?i)^https://github\.com/vishisht16/syg/\.github/workflows/release\.yml@refs/(heads/main|tags/v.+)$'
 
 say() { printf 'syg-install: %s\n' "$*" >&2; }
 die() { say "$*"; exit 1; }
@@ -66,8 +68,10 @@ verify_signature() {
     return 0
   fi
   fetch "$BASE/v$version/$archive.sigstore.json" "$tmp/bundle.json" || die "no signature for $archive"
+  identity=$IDENTITY
+  case "$version" in 1.0.0-rc.[123]) identity=$EARLY_IDENTITY ;; esac
   cosign verify-blob "$tmp/$archive" --bundle "$tmp/bundle.json" \
-    --certificate-identity-regexp "$IDENTITY" \
+    --certificate-identity-regexp "$identity" \
     --certificate-oidc-issuer https://token.actions.githubusercontent.com >/dev/null 2>&1 \
     || die "the signature of $archive does not verify"
   say "signature verified"

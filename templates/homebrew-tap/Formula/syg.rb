@@ -29,6 +29,10 @@ class Syg < Formula
 
   def install
     bin.install "syg"
+    bash_completion.install "completions/syg.bash" => "syg"
+    zsh_completion.install "completions/_syg"
+    fish_completion.install "completions/syg.fish"
+    man1.install "man/syg.1"
     # What comes with it: the EULA, the privacy statement and the notices of
     # the components it includes.
     prefix.install Dir["*.md", "*.txt"]
@@ -38,6 +42,7 @@ class Syg < Formula
     # Testing the formula is not using Syg: no usage statistics.
     ENV["SYG_TELEMETRY"] = "off"
     assert_match "syg #{version}", shell_output("#{bin}/syg version")
+    assert_match "complete -F _syg syg", shell_output("#{bin}/syg completion bash")
     (testpath/"new").mkpath
     system bin/"syg", "init", testpath/"new/app", "--service", "api"
     system bin/"syg", "check", testpath/"new/app"

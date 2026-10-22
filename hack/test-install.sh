@@ -27,9 +27,9 @@ fail() { echo "test-install: FAIL: $*" >&2; exit 1; }
 # its version and whether a signature verifies.
 mkdir -p "$work/stub"
 PATH="$work/stub:$PATH"
-cosign_stub() { # cosign_stub MAJOR EXIT: cosign MAJOR.x, verify-blob exits EXIT
-  # shellcheck disable=SC2016 # the $1 is the stub's own argument
-  printf '#!/bin/sh\ncase "$1" in version) echo "GitVersion:    v%s.0.1" ;; verify-blob) exit %s ;; esac\n' "$1" "$2" > "$work/stub/cosign"
+cosign_stub() { # cosign_stub MAJOR EXIT: cosign MAJOR.x, verify-blob exits EXIT, its arguments in cosign.args
+  # shellcheck disable=SC2016 # the $1 and $@ are the stub's own
+  printf '#!/bin/sh\ncase "$1" in version) echo "GitVersion:    v%s.0.1" ;; verify-blob) echo "$@" > "%s/cosign.args"; exit %s ;; esac\n' "$1" "$work" "$2" > "$work/stub/cosign"
   chmod +x "$work/stub/cosign"
 }
 cosign_stub 2 1
@@ -51,6 +51,12 @@ grep -q "downloading syg 1.2.3" "$work/log" || fail "the pinned version was not 
 cosign_stub 3 0
 SYG_VERSION=1.2.3 SYG_INSTALL_DIR="$work/e" sh "$here/install.sh" 2>"$work/log" || { cat "$work/log"; fail "a signed release failed"; }
 grep -q "signature verified" "$work/log" || fail "cosign 3 did not check the signature"
+grep -qF 'workflows/build\.yml@' "$work/cosign.args" || fail "the signature was not checked against build.yml: $(cat "$work/cosign.args")"
+
+# Releases up to 1.0.0-rc.3 were signed by release.yml.
+release 1.0.0-rc.3 signed
+SYG_VERSION=1.0.0-rc.3 SYG_INSTALL_DIR="$work/e3" sh "$here/install.sh" 2>"$work/log" || { cat "$work/log"; fail "rc.3 failed"; }
+grep -qF 'workflows/release\.yml@' "$work/cosign.args" || fail "rc.3's signature was not checked against release.yml: $(cat "$work/cosign.args")"
 
 cosign_stub 3 1
 if SYG_VERSION=1.2.3 SYG_INSTALL_DIR="$work/f" sh "$here/install.sh" 2>"$work/log"; then fail "a bad signature installed"; fi
