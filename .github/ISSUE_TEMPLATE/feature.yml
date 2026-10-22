@@ -1,0 +1,22 @@
+name: An idea
+description: Something Syg could do, or do better.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you are trying to do
+      description: The deployment, the mistake you want caught, or the step that is harder than it should be.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help
+  - type: checkboxes
+    id: non-goals
+    attributes:
+      label: Non-goals
+      options:
+        - label: I read what Syg will not do (https://syg.vishisht.tech/non-goals.html), and this is not one of them.
+          required: true

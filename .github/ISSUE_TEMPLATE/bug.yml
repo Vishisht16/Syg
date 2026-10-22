@@ -1,0 +1,56 @@
+name: Bug report
+description: Syg did something it should not, or printed something wrong.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A vulnerability goes to private reporting, never to an issue: see SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: What `syg version` prints.
+      placeholder: syg 1.0.0 (Kubernetes 1.32 schema, k8s.io/api v0.32.13)
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: The operating system and the CPU.
+      placeholder: macOS 15 on arm64
+    validations:
+      required: true
+  - type: dropdown
+    id: installed
+    attributes:
+      label: Installed with
+      options:
+        - the install script
+        - Homebrew
+        - Scoop
+        - a .deb or .rpm package
+        - the container image
+        - the GitHub Action (setup-syg)
+        - by hand, from a release archive
+    validations:
+      required: true
+  - type: textarea
+    id: ran
+    attributes:
+      label: What you ran, and what it printed
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: module
+    attributes:
+      label: The smallest module that shows it
+      description: The .syg files (and syg.yaml), cut down to what still shows the problem.
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true

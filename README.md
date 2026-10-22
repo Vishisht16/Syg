@@ -78,10 +78,12 @@ $ curl -fsSL https://syg.vishisht.tech/install.sh | sh  # macOS, Linux
 > scoop bucket add syg https://github.com/vishisht16/syg; scoop install syg   # Windows
 ```
 
-In GitHub Actions, `uses: vishisht16/setup-syg@v1`; anywhere else, the image
-`ghcr.io/vishisht16/syg`. Every download is checksummed, signed, attested and
-comes with an SBOM; see [install](https://syg.vishisht.tech/install.html) for
-verifying them, for `.deb` and `.rpm` packages, and for downloading by hand.
+In GitHub Actions, `uses: vishisht16/setup-syg@v1`; in other CI, the install
+script, or the image `ghcr.io/vishisht16/syg` where a step runs an image's own
+command. Every download is checksummed, signed, attested and comes with an
+SBOM: [security](https://syg.vishisht.tech/security.html) says how to verify
+them, and [install](https://syg.vishisht.tech/install.html) covers `.deb` and
+`.rpm` packages, shell completions and downloading by hand.
 
 A binary downloaded with a browser on macOS is quarantined; clear it with
 `xattr -d com.apple.quarantine ./syg`. Homebrew and the install script need
@@ -119,10 +121,12 @@ These are out of scope by design, each to prevent a specific failure:
 
 ## Licence, privacy, security
 
-Syg is distributed under the [Syg EULA](EULA.md). It sends anonymous usage
-statistics, with no names, paths or code; [PRIVACY.md](PRIVACY.md) says exactly
-what, and `SYG_TELEMETRY=off` turns them off. To report a vulnerability, see
-[SECURITY.md](SECURITY.md).
+Syg is distributed under the [Syg EULA](EULA.md). The code in this
+repository that builds, publishes and installs it is under the MIT licence
+([LICENSE](LICENSE)). Syg sends anonymous usage statistics, with no names,
+paths or code; [PRIVACY.md](PRIVACY.md) says exactly what, and
+`SYG_TELEMETRY=off` turns them off. To report a vulnerability, see
+[SECURITY.md](SECURITY.md); for anything else, [SUPPORT.md](SUPPORT.md).
 
 The source is not public. This repository holds the releases, the installers
 and the [relay](relay/) that receives the usage statistics. Every release here

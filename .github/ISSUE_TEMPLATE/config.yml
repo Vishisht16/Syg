@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: A vulnerability
+    url: https://github.com/vishisht16/syg/security/advisories/new
+    about: Report it privately, never in an issue.
+  - name: The documentation
+    url: https://syg.vishisht.tech
+    about: The language, the CLI, every rule, and how to verify a download.
