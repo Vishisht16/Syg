@@ -1,41 +1,85 @@
 name: publish-docs
 
 # Publishes the documentation a build made, the `docs` artifact of the calling
-# run (site/, docs-md/ and docs-urls.txt), for release.yml and docs.yml: the
-# Markdown is committed to docs/ here, with the changelog, the EULA and the
-# privacy statement at the root, and the site is deployed to syg.vishisht.tech
-# with the install scripts beside it, then checked there. Without `publish`,
-# the site is only packaged for Pages, which still tests the path.
+# run (docs-md/ and docs-urls.txt), for release.yml and docs.yml. The site at
+# syg.vishisht.tech is built from this repository's docs/ by
+# Vishisht16/syg-site, so the docs are first built into that site here, as
+# its main builds it. With `publish`, the Markdown is then committed to docs/,
+# with the changelog, the EULA and the privacy statement at the root;
+# syg-site's deploy is started for that commit; and every rule's docs_url is
+# looked for on the site the domain serves. Without `publish`, nothing is
+# published.
 on:
   workflow_call:
     inputs:
       publish:
-        description: "commit docs/ and deploy the site"
+        description: "commit docs/ and publish the site"
         type: boolean
         required: true
       message:
         description: "the message of the commit to docs/"
         type: string
         required: true
+    secrets:
+      SITE_DISPATCH_TOKEN:
+        description: "starts syg-site's deploy (fine-grained: Vishisht16/syg-site, Actions read and write); without it the site follows at syg-site's daily build"
+        required: false
 
 permissions:
   contents: read
 
 jobs:
-  package:
+  # The docs as syg-site builds them: a page that does not build into the
+  # site is found before anything is published.
+  site:
     runs-on: ubuntu-24.04
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: ${{ inputs.publish }}
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Vishisht16/syg-site
+          path: site
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: docs
+          path: built
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: site/package.json
+          no-cache: true
+      - name: build the site from these docs
+        run: |
+          mkdir -p "$RUNNER_TEMP/syg"
+          cp -r built/docs-md "$RUNNER_TEMP/syg/docs"
+          cp install.sh install.ps1 "$RUNNER_TEMP/syg/"
+          cd site
+          bun install --frozen-lockfile
+          SYG_DIR="$RUNNER_TEMP/syg" bun run build
+
+  commit:
+    needs: site
+    if: inputs.publish
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    outputs:
+      commit: ${{ steps.commit.outputs.commit }}
+    steps:
+      # The push below uses the checkout's credentials.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: docs
           path: built
       - name: commit the docs
-        if: inputs.publish
+        id: commit
         env:
           MESSAGE: ${{ inputs.message }}
         run: |
@@ -50,62 +94,50 @@ jobs:
           # A release's channels job pushes to main at the same time: rebase
           # and retry.
           for _ in 1 2 3; do
-            if git pull --rebase -q origin main && git push -q origin HEAD:main; then exit 0; fi
+            if git pull --rebase -q origin main && git push -q origin HEAD:main; then
+              echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
             sleep 5
           done
           exit 1
-      - name: the install scripts, at the site's root
-        run: cp install.sh install.ps1 built/site/
-      - name: security.txt
-        # RFC 9116: where to report a vulnerability. It expires within a
-        # year, so each publish writes it afresh.
-        run: |
-          mkdir -p built/site/.well-known
-          cat > built/site/.well-known/security.txt <<EOF
-          Contact: https://github.com/vishisht16/syg/security/advisories/new
-          Expires: $(date -u -d '+364 days' +%Y-%m-%dT00:00:00Z)
-          Policy: https://github.com/vishisht16/syg/security/policy
-          Preferred-Languages: en
-          Canonical: https://syg.vishisht.tech/.well-known/security.txt
-          EOF
-          sed -i 's/^ *//' built/site/.well-known/security.txt
-          cat built/site/.well-known/security.txt
-      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
-        with:
-          path: built/site
-          include-hidden-files: true
 
-  deploy:
-    needs: package
-    if: inputs.publish
+  dispatch:
+    needs: commit
     runs-on: ubuntu-24.04
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    # One deployment at a time: a release and docs.yml never race.
-    concurrency:
-      group: pages
-      cancel-in-progress: false
+    outputs:
+      started: ${{ steps.dispatch.outputs.started }}
     steps:
-      - id: deployment
-        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+      - name: build and deploy the site from that commit
+        id: dispatch
+        env:
+          GH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
+          COMMIT: ${{ needs.commit.outputs.commit }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::SITE_DISPATCH_TOKEN is not set: syg.vishisht.tech shows these docs after syg-site's next daily build"
+            exit 0
+          fi
+          gh workflow run deploy.yml --repo Vishisht16/syg-site --ref main -f ref="$COMMIT"
+          echo "started=true" >> "$GITHUB_OUTPUT"
 
-  # The site now served is the one built, and every rule's docs_url finds its
-  # section there. A page that answers 200 can still be an older build,
-  # without the section a newer rule links to (hack/check-site.sh).
+  # The domain serves the docs of that commit, or of a later one, and every
+  # rule's docs_url finds its section there (hack/check-site.sh).
   verify:
-    needs: deploy
+    needs: [commit, dispatch]
+    if: needs.dispatch.outputs.started == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.commit.outputs.commit }}
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: docs
           path: built
-      - name: the deployed site is the one built
-        run: bash hack/check-site.sh https://syg.vishisht.tech built
+      - name: the site serves these docs
+        env:
+          COMMIT: ${{ needs.commit.outputs.commit }}
+        run: bash hack/check-site.sh https://syg.vishisht.tech built/docs-urls.txt "$COMMIT"

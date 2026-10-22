@@ -109,14 +109,13 @@ jobs:
         working-directory: core
         run: python3 hack/release-notes.py "$TAG" > ../meta/notes.md
       - name: documentation
-        # The site and its Markdown export, from the source at this tag, by a
-        # binary that carries the release's version (the site shows it).
+        # The Markdown export of the documentation, from the source at this
+        # tag, which syg-site builds the site from, and every rule's docs_url.
         working-directory: core
         env:
           CGO_ENABLED: "0"
         run: |
           go build -ldflags "-X github.com/vishisht16/syg/internal/buildinfo.Version=${TAG#v}" -o "$RUNNER_TEMP/syg-docs" ./cmd/syg
-          "$RUNNER_TEMP/syg-docs" docs build -o ../site
           "$RUNNER_TEMP/syg-docs" docs build --markdown -o ../docs-md
           cp CHANGELOG.md ../docs-md/CHANGELOG.md
           # Every rule's docs_url, for publish-docs to find on the deployed site.
@@ -166,7 +165,6 @@ jobs:
         with:
           name: docs
           path: |
-            site/
             docs-md/
             docs-urls.txt
           if-no-files-found: error

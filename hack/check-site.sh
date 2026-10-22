@@ -1,58 +1,74 @@
 #!/usr/bin/env bash
-# The site deployed at BASE is the one built in DIR, and every rule's address
-# finds its section there:
+# The site at BASE serves the docs of this repository's commit COMMIT, or of a
+# later one, and every rule's address finds its section there:
 #
-#   bash hack/check-site.sh https://syg.vishisht.tech built
+#   bash hack/check-site.sh https://syg.vishisht.tech built/docs-urls.txt COMMIT
 #
-# DIR is the docs artifact: DIR/site, the site as built, and DIR/docs-urls.txt,
-# the docs_url of every rule, which each finding and `syg explain` print. A
-# page can answer 200 and still be an older build, without a section a newer
-# rule links to, so each deployed file is compared with the built one, byte
-# for byte, and each address's section is looked for by its id. The pages the
-# binary and the installers name are asked for too, and the install scripts
-# compared with this repository's. security.txt, which publish-docs writes
-# beside the built files, must name a contact and not have expired. Pages's
-# CDN keeps a page for up to ten minutes, so each attempt asks with a query
-# of its own, and a failure is retried for twelve minutes
-# (CHECK_SITE_ATTEMPTS, 30 s apart) before it fails the run.
+# Vishisht16/syg-site builds the site from docs/ here, and names the commit it
+# built from in BASE/build.json. Run it in a checkout of this repository with
+# its history. DOCS-URLS holds the docs_url of every rule, which each finding
+# and `syg explain` print; each must find its section by id. The pages the
+# binary and the installers name are asked for too, the install scripts
+# compared with those of the commit served, and security.txt must name a
+# contact and not have expired. A deploy and Pages's CDN take some minutes,
+# so each attempt asks with a query of its own, and a failure is retried for
+# 25 minutes (CHECK_SITE_ATTEMPTS, 30 s apart) before it fails the run.
 set -euo pipefail
-attempts=${CHECK_SITE_ATTEMPTS:-25}
-base=${1:?usage: check-site.sh BASE DIR}
-dir=${2:?usage: check-site.sh BASE DIR}
+attempts=${CHECK_SITE_ATTEMPTS:-50}
+base=${1:?usage: check-site.sh BASE DOCS-URLS COMMIT}
+urls=${2:?usage: check-site.sh BASE DOCS-URLS COMMIT}
+commit=${3:?usage: check-site.sh BASE DOCS-URLS COMMIT}
 base=${base%/}
-if [ ! -d "$dir/site" ] || [ ! -s "$dir/docs-urls.txt" ]; then
-  echo "::error::$dir holds no site/ and docs-urls.txt"
+if [ ! -s "$urls" ]; then
+  echo "::error::$urls names no rules"
   exit 1
 fi
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
+# get URL FILE: the body at URL into FILE; prints the status, 000 for none.
+get() { curl -sS --max-time 30 -o "$2" -w '%{http_code}' "$1" 2>/dev/null || echo 000; }
+
 # check ATTEMPT: every problem, one per line, on stdout; none is a pass.
 check() {
-  local q="?check=${GITHUB_RUN_ID:-local}-$1" f rel url page id p
-  while IFS= read -r f; do
-    rel=${f#"$dir/site/"}
-    if ! curl -fsS --max-time 30 -o "$work/got" "$base/$rel$q" 2>/dev/null; then
-      echo "missing: $base/$rel"
-    elif ! cmp -s "$work/got" "$f"; then
-      echo "not the page built: $base/$rel"
-    fi
-  done < <(find "$dir/site" -type f -not -path '*/.*' | sort)
+  local q="?check=${GITHUB_RUN_ID:-local}-$1" url page id p code served
+  code=$(get "$base/build.json$q" "$work/build.json")
+  served=$(sed -n 's/.*"syg":"\([0-9a-f]\{40\}\)".*/\1/p' "$work/build.json" 2>/dev/null || true)
+  if [ "$code" != 200 ] || [ -z "$served" ]; then
+    echo "$code, names no commit: $base/build.json"
+    return
+  fi
+  git cat-file -e "$served^{commit}" 2>/dev/null || git fetch -q origin main 2>/dev/null || true
+  if [ "$served" != "$commit" ] && ! git merge-base --is-ancestor "$commit" "$served" 2>/dev/null; then
+    echo "the docs of $served, not of $commit or later: $base"
+    return
+  fi
   while IFS= read -r url; do
     page=${url%%#*}
     id=${url#*#}
     case "$page" in "$base"/*) ;; *) echo "not on the site: $url"; continue ;; esac
-    if ! curl -fsS --max-time 30 -o "$work/got" "$page$q" 2>/dev/null; then
-      echo "missing: $page"
-    elif [ "$id" != "$url" ] && ! grep -qF "id=\"$id\"" "$work/got"; then
+    code=$(get "$page$q" "$work/got")
+    if [ "$code" != 200 ]; then
+      echo "$code: $page"
+    elif [ "$id" != "$url" ] && ! grep -aqF "id=\"$id\"" "$work/got"; then
       echo "no section: $url"
     fi
-  done < "$dir/docs-urls.txt"
+  done < "$urls"
   for p in install privacy eula; do
-    curl -fsS --max-time 30 -o /dev/null "$base/$p$q" 2>/dev/null || echo "missing: $base/$p"
+    code=$(get "$base/$p$q" "$work/got")
+    [ "$code" = 200 ] || echo "$code: $base/$p"
   done
-  if ! curl -fsS --max-time 30 -o "$work/security.txt" "$base/.well-known/security.txt$q" 2>/dev/null; then
-    echo "missing: $base/.well-known/security.txt"
+  for p in install.sh install.ps1; do
+    code=$(get "$base/$p$q" "$work/got")
+    if [ "$code" != 200 ]; then
+      echo "$code: $base/$p"
+    elif ! git show "$served:$p" | cmp -s "$work/got" -; then
+      echo "not $p of $served: $base/$p"
+    fi
+  done
+  code=$(get "$base/.well-known/security.txt$q" "$work/security.txt")
+  if [ "$code" != 200 ]; then
+    echo "$code: $base/.well-known/security.txt"
   elif ! grep -q '^Contact: https://' "$work/security.txt"; then
     echo "names no Contact: $base/.well-known/security.txt"
   else
@@ -61,25 +77,17 @@ check() {
       echo "expired, or no Expires: $base/.well-known/security.txt"
     fi
   fi
-  for p in install.sh install.ps1; do
-    if ! curl -fsS --max-time 30 -o "$work/got" "$base/$p$q" 2>/dev/null; then
-      echo "missing: $base/$p"
-    elif [ -f "$p" ] && ! cmp -s "$work/got" "$p"; then
-      echo "not this repository's: $base/$p"
-    fi
-  done
 }
 
-files=$(find "$dir/site" -type f -not -path '*/.*' | wc -l)
-urls=$(grep -c . "$dir/docs-urls.txt")
+rules=$(grep -c . "$urls")
 for attempt in $(seq 1 "$attempts"); do
   check "$attempt" > "$work/problems"
   if [ ! -s "$work/problems" ]; then
-    echo "$base is the site built: $files files, and $urls rules' sections"
+    echo "$base serves the docs of $commit or later, with $rules rules' sections"
     exit 0
   fi
   if [ "$attempt" -lt "$attempts" ]; then sleep 30; fi
 done
-echo "::error::$base is not the site built: $(wc -l < "$work/problems") problems"
+echo "::error::$base does not serve these docs: $(wc -l < "$work/problems") problems"
 cat "$work/problems"
 exit 1

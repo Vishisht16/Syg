@@ -214,19 +214,19 @@ jobs:
             echo "ghcr.io/vishisht16/syg:$t = $DIGEST"
           done
 
-  # The documentation of a final release: committed to docs/ here, and published
-  # at syg.vishisht.tech with the install scripts beside it. A pre-release
-  # packages the site the same way, and publishes nothing.
+  # The documentation of a final release: committed to docs/ here, which
+  # syg-site publishes at syg.vishisht.tech. A pre-release builds it into the
+  # site the same way, and publishes nothing.
   docs:
     needs: publish
     permissions:
       contents: write
-      pages: write
-      id-token: write
     uses: ./.github/workflows/publish-docs.yml
     with:
       publish: ${{ !contains(github.event.inputs.tag || github.ref_name, '-') }}
       message: Docs for ${{ github.event.inputs.tag || github.ref_name }}
+    secrets:
+      SITE_DISPATCH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
 
   channels:
     needs: publish
