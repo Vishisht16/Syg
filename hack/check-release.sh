@@ -19,6 +19,9 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 fail() { echo "::error::$*"; exit 1; }
 ok() { echo "ok: $*"; }
+# A command in a network namespace of its own, which has only a loopback
+# interface, as the calling user: what it writes stays theirs.
+offline() { sudo unshare --net --setuid "$(id -u)" --setgid "$(id -g)" -- "$@"; }
 
 repo=Vishisht16/Syg
 workflow=build.yml strict=1
@@ -74,7 +77,7 @@ if [ -n "$strict" ]; then
   # Offline, from the release's .intoto.jsonl and a trusted root fetched
   # here: in a namespace with no network at all.
   gh attestation trusted-root > "$work/trusted_root.jsonl"
-  sudo unshare --net -- env -u GH_TOKEN HOME="$work" PATH="$PATH" \
+  offline env -u GH_TOKEN HOME="$work" PATH="$PATH" \
     gh attestation verify "$dir/$archive" --repo "$repo" --signer-workflow "$signer" \
     --bundle "$dir/syg_$version.intoto.jsonl" --custom-trusted-root "$work/trusted_root.jsonl" > /dev/null \
     || fail "$archive does not verify offline from syg_$version.intoto.jsonl"
@@ -110,14 +113,14 @@ for ci in true ""; do
   for args in "check $work/m" "build $work/m -o $work/out" "version"; do
     start=$(date +%s%N)
     # shellcheck disable=SC2086 # the arguments are words
-    sudo unshare --net -- env -i PATH=/usr/bin:/bin HOME="$work/home" GITHUB_ACTIONS="$ci" \
+    offline env -i PATH=/usr/bin:/bin HOME="$work/home" GITHUB_ACTIONS="$ci" \
       SYG_CONFIG_DIR="$work/config" "$syg" $args > /dev/null 2>&1 || fail "syg $args failed with no network (CI: ${ci:-no})"
     ms=$(( ($(date +%s%N) - start) / 1000000 ))
     [ "$ms" -lt 3000 ] || fail "syg $args took ${ms} ms with no network (CI: ${ci:-no})"
   done
 done
 code=0
-sudo unshare --net -- env -i PATH=/usr/bin:/bin HOME="$work/home" "$syg" schema vendor --from https://example.com/crds.yaml "$work/m" > /dev/null 2>&1 || code=$?
+offline env -i PATH=/usr/bin:/bin HOME="$work/home" "$syg" schema vendor --from https://example.com/crds.yaml "$work/m" > /dev/null 2>&1 || code=$?
 [ "$code" = 2 ] || fail "schema vendor with no network exited $code, not 2"
 ok "with no network: check, build and version as usual, schema vendor exits 2"
 

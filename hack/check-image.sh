@@ -30,10 +30,14 @@ gh attestation verify "oci://$image" --repo Vishisht16/Syg --signer-workflow "$s
   || fail "the image's SBOM does not verify against $signer"
 ok "provenance and SBOM attested by $workflow"
 
-docker pull -q "$image" > /dev/null
-user=$(docker inspect --format '{{.Config.User}}' "$image")
-[ "$user" = 65532:65532 ] || fail "the image runs as ${user:-root}, not 65532:65532"
-for p in linux/amd64 linux/arm64; do
+# One platform at a time: Docker's classic image store keeps one image per
+# digest, and refuses to pull a second platform's under it. amd64 comes last
+# and stays for the runs below.
+for p in linux/arm64 linux/amd64; do
+  docker image rm -f "$image" > /dev/null 2>&1 || true
+  docker pull -q --platform "$p" "$image" > /dev/null
+  got=$(docker inspect --format '{{.Os}}/{{.Architecture}} {{.Config.User}}' "$image")
+  [ "$got" = "$p 65532:65532" ] || fail "the $p image is $got, not $p running as 65532:65532"
   docker run --rm --platform "$p" -e SYG_TELEMETRY=off "$image" version | grep -q "^syg $version " \
     || fail "the $p image is not syg $version"
 done
