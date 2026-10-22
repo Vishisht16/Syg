@@ -63,8 +63,7 @@ and the image, with `cosign verify ghcr.io/vishisht16/syg:1.0.0` and the same
 two certificate flags, or `gh attestation verify oci://ghcr.io/vishisht16/syg:1.0.0`
 with the same `--repo` and `--signer-workflow`. Verifying offline, and what
 the provenance and the source statement say:
-[security](https://syg.vishisht.tech/security.html). Releases up to
-1.0.0-rc.3 were signed by `release.yml` in place of `build.yml`.
+[security](https://syg.vishisht.tech/security.html).
 
 `install.sh` checks the archive against the release's `SHA256SUMS`, and its
 signature when cosign 3 or newer is installed. setup-syg checks the checksum

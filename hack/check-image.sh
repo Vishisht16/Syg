@@ -66,10 +66,8 @@ chmod 755 "$work/src"
 [ -n "$(find "$work/src/out" -name '*.yaml' -print -quit)" ] || fail "build wrote no manifests"
 ok "init, check and build, read-only, with no capabilities"
 
-# What comes with the binary. The notices come with every release from rc.4
-# on.
+# What comes with the binary.
 docs="EULA.md PRIVACY.md THIRD_PARTY_NOTICES.txt"
-case "$version" in 1.0.0-rc.[123]) docs="EULA.md PRIVACY.md" ;; esac
 files=/usr/local/bin/syg
 for f in $docs; do files="$files /usr/share/doc/syg/$f"; done
 cid=$(docker create "$image")

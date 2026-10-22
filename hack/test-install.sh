@@ -53,10 +53,10 @@ SYG_VERSION=1.2.3 SYG_INSTALL_DIR="$work/e" sh "$here/install.sh" 2>"$work/log" 
 grep -q "signature verified" "$work/log" || fail "cosign 3 did not check the signature"
 grep -qF 'workflows/build\.yml@' "$work/cosign.args" || fail "the signature was not checked against build.yml: $(cat "$work/cosign.args")"
 
-# Releases up to 1.0.0-rc.3 were signed by release.yml.
-release 1.0.0-rc.3 signed
-SYG_VERSION=1.0.0-rc.3 SYG_INSTALL_DIR="$work/e3" sh "$here/install.sh" 2>"$work/log" || { cat "$work/log"; fail "rc.3 failed"; }
-grep -qF 'workflows/release\.yml@' "$work/cosign.args" || fail "rc.3's signature was not checked against release.yml: $(cat "$work/cosign.args")"
+# A release candidate is signed by build.yml too.
+release 1.0.0-rc.4 signed
+SYG_VERSION=1.0.0-rc.4 SYG_INSTALL_DIR="$work/e4" sh "$here/install.sh" 2>"$work/log" || { cat "$work/log"; fail "rc.4 failed"; }
+grep -qF 'workflows/build\.yml@' "$work/cosign.args" || fail "rc.4's signature was not checked against build.yml: $(cat "$work/cosign.args")"
 
 cosign_stub 3 1
 if SYG_VERSION=1.2.3 SYG_INSTALL_DIR="$work/f" sh "$here/install.sh" 2>"$work/log"; then fail "a bad signature installed"; fi

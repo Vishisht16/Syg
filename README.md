@@ -132,3 +132,6 @@ The source is not public. This repository holds the releases, the installers
 and the [relay](relay/) that receives the usage statistics. Every release here
 is built and tested by this repository's own
 [release workflow](.github/workflows/release.yml).
+
+Kubernetes is a registered trademark of The Linux Foundation. Syg is not
+affiliated with or endorsed by it.

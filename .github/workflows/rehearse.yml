@@ -23,7 +23,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "a published release, e.g. v1.0.0-rc.3"
+        description: "a published release, e.g. v1.0.0-rc.4"
         required: true
       jobs:
         description: "what to rehearse"

@@ -36,10 +36,7 @@ runs:
           mkdir -p "image/linux/$arch"
           tar xzf "dist/syg_${VERSION}_linux_${arch}.tar.gz" -C "image/linux/$arch" syg
         done
-        tar xzf "dist/syg_${VERSION}_linux_amd64.tar.gz" -C image/doc EULA.md PRIVACY.md
-        # The notices come with every release from rc.4 on; hack/check-image.sh
-        # says when one lacks them.
-        tar xzf "dist/syg_${VERSION}_linux_amd64.tar.gz" -C image/doc THIRD_PARTY_NOTICES.txt 2>/dev/null || true
+        tar xzf "dist/syg_${VERSION}_linux_amd64.tar.gz" -C image/doc EULA.md PRIVACY.md THIRD_PARTY_NOTICES.txt
     # The Dockerfile only copies files, so both platforms build without
     # emulation, and BuildKit's own image is pinned by digest: this job can
     # sign, and runs nothing that a moving tag can change.
