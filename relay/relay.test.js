@@ -38,6 +38,12 @@ test("anything outside the allowlist rejects the event", () => {
   assert.ok(!("module" in clean({ ...good, module: "payments" })), "an unknown field is dropped");
 });
 
+test("every command the CLI names passes", () => {
+  for (const command of ["build", "check", "completion", "docs", "explain", "fmt", "graph", "help", "init", "lsp", "mod", "other", "rules", "schema", "snapshot", "telemetry", "version", "why"]) {
+    assert.equal(clean({ ...good, command })?.command, command, command);
+  }
+});
+
 test("a crash's frames pass as Go names them, generics and closures included", () => {
   const crash = ["internal/env.find[...]", "internal/cli.Main.func2", "internal/lsp.(*server).handle"];
   assert.deepEqual(clean({ ...good, crash }).crash, crash);

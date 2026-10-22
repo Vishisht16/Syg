@@ -17,7 +17,7 @@
 // silently, so a relay that is down costs nothing but data.
 
 const ENUMS = {
-  command: ["build", "check", "docs", "explain", "fmt", "graph", "help", "init", "lsp", "mod", "other", "rules", "schema", "snapshot", "telemetry", "version", "why"],
+  command: ["build", "check", "completion", "docs", "explain", "fmt", "graph", "help", "init", "lsp", "mod", "other", "rules", "schema", "snapshot", "telemetry", "version", "why"],
   ci: ["azure", "bitbucket", "buildkite", "circleci", "codebuild", "drone", "github", "gitlab", "jenkins", "none", "other", "teamcity", "travis"],
   nodes: ["0", "1-10", "11-50", "51-200", "201-1000", "1001+"],
   edges: ["0", "1-10", "11-50", "51-200", "201-1000", "1001+"],
