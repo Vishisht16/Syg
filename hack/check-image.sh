@@ -56,7 +56,10 @@ docs="EULA.md PRIVACY.md THIRD_PARTY_NOTICES.txt"
 case "$version" in 1.0.0-rc.[123]) docs="EULA.md PRIVACY.md" ;; esac
 cid=$(docker create "$image")
 for f in $docs; do
-  docker cp -q "$cid:/usr/share/doc/syg/$f" "$work/$f" && [ -s "$work/$f" ] || { docker rm -f "$cid" > /dev/null; fail "/usr/share/doc/syg/$f is not in the image"; }
+  if ! docker cp -q "$cid:/usr/share/doc/syg/$f" "$work/$f" || [ ! -s "$work/$f" ]; then
+    docker rm -f "$cid" > /dev/null
+    fail "/usr/share/doc/syg/$f is not in the image"
+  fi
 done
 docker rm -f "$cid" > /dev/null
 ok "$docs in /usr/share/doc/syg"
