@@ -1,11 +1,14 @@
 version: 2
 updates:
   # Monthly, one pull request per ecosystem: the workflows' actions (pinned
-  # by commit) and the relay's npm packages.
+  # by commit) and the relay's npm packages. A version is proposed once it
+  # has been out for two weeks.
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    cooldown:
+      default-days: 14
     groups:
       actions:
         patterns: ["*"]
@@ -13,6 +16,8 @@ updates:
     directory: /relay
     schedule:
       interval: monthly
+    cooldown:
+      default-days: 14
     groups:
       relay:
         patterns: ["*"]

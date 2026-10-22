@@ -49,7 +49,11 @@ jobs:
         run: |
           printf '%s\n' "$TAG" | grep -Eqx 'v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?' \
             || { echo "::error::$TAG is not a release tag (vMAJOR.MINOR.PATCH, with an optional pre-release)"; exit 1; }
+      # The Scoop manifest's push uses the checkout's credentials. What is
+      # uploaded from this job is the two files it renders, by name.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true # zizmor: ignore[artipacked]
       - name: the release's checksums
         env:
           GH_TOKEN: ${{ github.token }}
