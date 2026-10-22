@@ -11,13 +11,14 @@ name: rehearse
 #     Scoop on Windows, on both architectures.
 #   - image: the image is built from the release's Linux archives by the same
 #     action build.yml uses, pushed by digest with no tag, signed and
-#     attested, and checked as release.yml checks it. Its signatures name
-#     this workflow, not build.yml, so no verification of a release accepts
-#     it. The untagged digest it leaves in the registry is harmless.
+#     attested, and checked as release.yml checks it, on amd64 and then on
+#     arm64. Its signatures name this workflow, not build.yml, so no
+#     verification of a release accepts it. The untagged digest it leaves in
+#     the registry is harmless.
 #   - verify: the release's files, checked as the documentation says
 #     (hack/check-release.sh).
-# `jobs: image` runs the last two alone, for a release whose archives the
-# channels' current formula does not fit.
+# `jobs: image` runs the image and verify jobs alone, for a release whose
+# archives the channels' current formula does not fit.
 on:
   workflow_dispatch:
     inputs:
@@ -129,6 +130,8 @@ jobs:
       packages: write
       id-token: write
       attestations: write
+    outputs:
+      digest: ${{ steps.image.outputs.digest }}
     steps:
       - name: check the tag
         run: |
@@ -153,7 +156,23 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           DIGEST: ${{ steps.image.outputs.digest }}
-        run: bash hack/check-image.sh "ghcr.io/vishisht16/syg@$DIGEST" "${TAG#v}" rehearse.yml
+        run: bash hack/check-image.sh "ghcr.io/vishisht16/syg@$DIGEST" "${TAG#v}" rehearse.yml dist
+
+  image-arm64:
+    needs: image
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: check the image, on arm64
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIGEST: ${{ needs.image.outputs.digest }}
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern 'syg_*_linux_arm64.tar.gz' --dir dist
+          bash hack/check-image.sh "ghcr.io/vishisht16/syg@$DIGEST" "${TAG#v}" rehearse.yml dist
 
   verify:
     runs-on: ubuntu-24.04
