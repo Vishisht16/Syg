@@ -9,7 +9,13 @@ controllers.
 
 ## What Syg is told, and what it does with it
 1. **The schema.** `syg schema vendor --from SRC` writes a
-   CRD's OpenAPI schema into the module's `schemas/` directory. From then on,
+   CRD's OpenAPI schema into the module's `schemas/` directory, as
+   `GROUP/Kind_version.json`: names the API server takes for a CRD, or the
+   source is refused before anything is written. Each kind has one schema,
+   from one CRD: a kind given twice, and two files whose names differ only in
+   case (one file on macOS and Windows), are refused when vendored and when
+   the module is loaded. A kind built into Syg keeps
+   Syg's own schema, for its raw objects and its relates alike. From then on,
    `check` validates every `raw` object of that kind against it, offline, with
    the field's path and the type the schema expects:
    - types, required fields, enums, patterns and bounds are checked;

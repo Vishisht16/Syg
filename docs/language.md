@@ -1,8 +1,10 @@
 # Language reference
 
 A module is a directory of `.syg` files that begin with the same `module NAME`
-line. Files can be split however you like; the module is compiled as one. This
-page covers every construct, with what it means. The exact Kubernetes fields
+line. Files can be split however you like; the module is compiled as one. Only
+the files directly in the directory are read: a subdirectory is not part of the
+module, whatever its name, and `vendor/` and `schemas/` are read for what they
+hold. This page covers every construct, with what it means. The exact Kubernetes fields
 each one produces are in the [derivation map](derivation-map.md), and the
 formal syntax is the [grammar](grammar.md).
 
@@ -77,7 +79,7 @@ Inside a workload:
 | `command "..." ...`, `args "..." ...` | replace the image's entrypoint and arguments; each string is one argument, and no shell is added |
 | `replicas N` | the replica count. Absent on an autoscaled workload, which leaves the count to the autoscaler |
 | `port NAME N [UDP\|SCTP]` | a named container port. Everything else refers to it as `:NAME` |
-| `resources { cpu Q, memory Q, limits { ... } }` | requests, and limits. Extended resources by name: `nvidia.com/gpu 1` (whole numbers), `ephemeral-storage 1Gi` |
+| `resources { cpu Q, memory Q, limits { ... } }` | requests, and limits. CPU in cores (`2`, `0.5`) or millicores (`500m`), memory in bytes with a unit (`512Mi`, `1Gi`, `2G`); see [quantities](#quantities). Extended resources by name: `nvidia.com/gpu 1` (whole numbers), `ephemeral-storage 1Gi` |
 | `qos guaranteed\|burstable\|besteffort` | the QoS class you intend; Syg derives the actual class from the resources and checks they agree (CHK-RES-004) |
 | `health { ready\|live\|startup PROBE }` | probes: `GET :port /path`, `TCP :port`, or `EXEC "command"` (run by `/bin/sh -c`) or `EXEC "arg" "arg" ...` (argv, no shell), with `every`, `timeout`, `after` (initial delay) and `failures` |
 | `env NAME = "V"` | an environment variable |
@@ -126,6 +128,30 @@ service api {
 preference. Placement keys other than the well-known ones are declared with
 `extern topology KEY { domains N }`, which also tells Syg how many domains
 there are, so it can tell when a strict rule cannot be met (CHK-SCH-001).
+
+In `security`, `runAsUser`, `runAsGroup` and `fsGroup` are numbers from 0 to
+2147483647, the range the API server accepts. There is no way to write a
+privileged container, a host namespace, a hostPath volume or a host port; a
+[raw](custom-resources.md) object that has one is reported by `host-access`.
+A capability beyond the container runtime's default set (`add SYS_ADMIN`), and
+`seccomp Unconfined`, can be written, and are reported by `kernel-privileges`:
+Pod Security's baseline level, which many clusters enforce, refuses the pods
+of a workload that has either.
+
+### Quantities
+
+A quantity is what Kubernetes counts:
+
+- **CPU** is in whole millicores: `2`, `0.5` and `250m` are fine, `0.0001` is
+  not. Kubernetes rounds anything finer up to the next millicore, so Syg asks
+  for that value instead. The API server also parses the `n` and `u` suffixes
+  on CPU, and rounds them up the same way, so Syg does not take them.
+- **Memory and storage** are in whole bytes, written with a unit: `512Mi`,
+  `1Gi`, `2G`. `0.5Gi` is fine. A bare `0.5` is half a byte, so it is an
+  error.
+
+What Syg emits is in the same terms: a quantity in its output is one you could
+write in the source, such as `1500m` for `1.5`.
 
 ## Configuration and secrets
 

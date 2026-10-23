@@ -98,6 +98,8 @@ Permissions wider than they need to be, and images that can change under you.
 - [`wildcard-permission`](../rules/identity.md#wildcard-permission): The grant silently widens over time: a component installed next year introduces a new resource kind, and this rule already covers it
 - [`cluster-wide-permission`](../rules/identity.md#cluster-wide-permission): A namespaced Role naming a cluster-scoped resource grants nothing, so the workload gets 403 on a call its author believed was authorised
 - [`unused-identity`](../rules/identity.md#unused-identity): Permissions are declared and reviewed but grant nothing, because nothing runs as the account
+- [`host-access`](../rules/identity.md#host-access): Where Pod Security baseline is enforced, the workload is accepted and its pods are refused, forever (FailedCreate, zero replicas); where it is not, they run with the node's processes, network or files, and a compromised container is a compromised node
+- [`kernel-privileges`](../rules/identity.md#kernel-privileges): Where Pod Security baseline is enforced, the workload is accepted and its pods are refused, forever (FailedCreate, zero replicas); where it is not, the container runs with kernel powers, such as SYS_ADMIN or every system call, that make a compromised container a compromised node
 
 ## [Storage and scheduling](../rules/storage.md)
 

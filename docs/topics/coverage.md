@@ -18,7 +18,9 @@ of some kind:
 - **Objects that run pods** (Deployments, Jobs, DaemonSets, Pods...). `CHK-CFG-006`
   says a config is unused, `CHK-RBAC-005` that an identity is unused, and
   `CHK-STO-002` that a ReadWriteOnce claim is mounted by one workload. Each is true
-  only if no pod Syg cannot see uses the thing.
+  only if no pod Syg cannot see uses the thing. (`CHK-SEC-002` and
+  `CHK-SEC-003` do read a raw object's pod spec, below, and report what they
+  find there.)
 - **Objects that route traffic** (Services, Ingresses, Routes). `CHK-NET-005` says
   no two routes claim a host and path, and `CHK-PRB-005` says which workloads
   receive traffic.
@@ -39,6 +41,45 @@ nothing in a kind's name says which it is. So is an admission mutator (a
 `MutatingWebhookConfiguration`, a `MutatingAdmissionPolicy`): it can change any
 object as it is created, after Syg checked it, so every check that depends on
 what is emitted reports reduced coverage for it.
+
+## Pod specs in custom resources
+`CHK-SEC-002` and `CHK-SEC-003` read a raw object's pod spec rather than
+assume they see every pod. A built-in kind holds one, where its schema puts
+it. A custom resource's kind does not say where, so they read every mapping in
+it with a list of containers, or of init containers, wherever it is: an Argo
+Rollout's `spec.template.spec`, an Elasticsearch's
+`spec.nodeSets[0].podTemplate.spec`, a Prometheus's `spec`, an item of a list,
+and one inside another. Only the object's own `metadata` and `status` are
+passed over. The note says where they read, and that they read nothing else in
+it:
+
+```
+info[coverage]: reduced coverage: raw Rollout web is opaque to CHK-CFG-006, CHK-NET-005, CHK-PRB-005, CHK-RBAC-005, CHK-STO-002
+   = consequence: ...; CHK-SEC-002 and CHK-SEC-003 read its pod spec at spec.template.spec, and nothing else in it
+```
+
+A custom resource that may run pods and holds none they can read is opaque to
+them, and the note names them with the rest: a kind Syg knows nothing of, or
+an Argo Workflow whose templates each name one `container`. A pod spec inside
+a string is not read either.
+
+In a custom resource they decode only what they judge, each value on its own:
+the pod's host namespaces and what they read of its security context, each
+volume's `hostPath`, and in each container what they read of its security
+context, each capability it adds and each port's `hostPort`. A value of the
+wrong type anywhere else, an image given as a list or a `runAsUser` beside
+`privileged`, hides nothing, and is not theirs to warn of. One they read, of
+the wrong type, is a warning at its line, since what it asks of the node is
+not judged:
+
+```
+warning[coverage]: raw Widget w: spec.template.spec.containers[1].securityContext.privileged does not decode as a pod's, so CHK-SEC-002 and CHK-SEC-003 cannot judge it
+```
+
+A custom resource that holds pod templates as data, a policy's patterns or a
+documentation kind's examples, is read as one that runs them. Keep such
+objects in a module of their own, whose `syg.yaml` sets the two rules to a
+warning or off.
 
 ## Objects no check judges
 Other kinds in the schema neither run pods, route traffic nor constrain
@@ -67,7 +108,23 @@ service as a destination routes traffic, and the traffic checks (`CHK-NET-005`,
 `CHK-PRB-005`) do not follow a relation, so they still report reduced coverage
 for it. A kind related through a pod template (`spec.template.spec...`, an
 Argo Rollout) runs pods, which can mount claims and read what no relation
-names, so it keeps the workload checks' note too. See `syg explain crd`.
+names, so it keeps the workload checks' note too, and so does a related
+object that holds a pod spec no relation names a path in. See `syg explain crd`.
+
+## Resources of an imported module
+An import brings in a module's types, profiles, schemas and relations. What
+the module deploys (its workloads, identities, policies, configs, secrets and
+raw objects) belongs to its own build: a build that imports it type-checks
+them, but does not emit them, and runs none of its rules on them. A raw
+binding to cluster-admin in an imported module is neither deployed nor judged
+by `CHK-RBAC-003` there. So the import says so, once per module:
+
+```
+info[coverage]: module platform declares 1 service and 2 raw objects, which this build type-checks but does not emit or run its rules on
+```
+
+To cover them, check and build that module itself, where they are its own. To
+deploy one of them with the importing module, declare it there.
 
 ## What to do about it
 Usually nothing: the note is advisory, and `syg check` still exits 0. It is there so

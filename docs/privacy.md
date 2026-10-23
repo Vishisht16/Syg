@@ -46,6 +46,12 @@ PostHog keeps the events in its EU region for 12 months, then deletes them.
 The relay's code is public, in
 [`relay/`](https://github.com/vishisht16/syg/tree/main/relay).
 
+`SYG_TELEMETRY_URL` points Syg at another relay, and takes only an address on
+the same machine (`127.0.0.1`, `::1` or `localhost`). Syg's own tests use it,
+and so can you, to watch exactly what is sent ([network](network.md#seeing-what-is-sent)).
+Any other value is ignored, so a release build sends to the relay or nowhere,
+and a development build sends nothing.
+
 ## When it is sent
 
 - Never in a development build.
@@ -53,7 +59,10 @@ The relay's code is public, in
 - In the background: a command adds its event to a queue in your config
   directory and, at most once an hour, starts `syg telemetry send`, a separate
   process that sends the queue and exits, giving up after two seconds. No
-  command waits for it, and a failure is silent.
+  command waits for it, and a failure is silent. The queue and the settings
+  (`queue.jsonl`, `config.json`) are read and written only as regular files:
+  anything else at those paths, such as a link or a named pipe, is passed over
+  or replaced, never waited on.
 - In CI, which has no later run, at exit, waiting at most 250 ms.
 
 ## Turning it off
@@ -72,3 +81,20 @@ At most once a day, outside CI, `syg telemetry send` also asks the relay for
 the latest release, sending Syg's version, OS and architecture. When a newer
 one exists, a later command prints a one-line notice on a terminal. It is off
 whenever telemetry is.
+
+## Who is responsible
+
+Vishisht Mishra, who makes Syg, is responsible for these statistics, and can
+be reached at [syg@vishisht.tech](mailto:syg@vishisht.tech). They are collected
+for one purpose, to improve Syg, on the basis of a legitimate interest in
+doing so; that is why any of the switches above turns them off, and why they
+hold nothing that names you or your work.
+
+To ask what is held for your installation, or to have it deleted, write with
+its identifier: the `id` in `config.json`, in Syg's configuration directory
+([`SYG_CONFIG_DIR`](cli.md#environment)). Deleting `config.json` gives the
+installation a new identifier. Events from CI carry none, so nothing ties
+them to an installation.
+
+A change to this page comes with Syg's documentation, and the changelog says
+so.

@@ -46,7 +46,10 @@ and does not pretend to. Two consequences:
 - A `raw` object (any Kubernetes object, written as YAML) is passed through.
   A rule that must see every object of a kind to be right, such as "every
   Service has a readiness-probed backend", reports **reduced coverage** for it,
-  rather than a clean result it has not earned.
+  rather than a clean result it has not earned. Three rules read inside one:
+  raw RBAC, and a raw pod spec, a built-in kind's or one in a custom resource
+  such as an Argo Rollout, for what reaches into its node and what it asks of
+  the kernel ([custom resources](custom-resources.md#raw-objects)).
 
 `syg check --print-world` lists exactly what the closed world contains. `syg
 explain closed-world` and `syg explain coverage` say more.
@@ -169,10 +172,15 @@ require:
 PREVENTED rules cannot be turned off: they are not settings, they are what the
 language means.
 
+A rule turned off is named on every check that runs without it, in a note
+(`info[config]`), as rules skipped for want of a snapshot or a baseline are: a
+check that did not run a rule did not pass it, and a pull request that turns
+one off shows that in its own check. A rule at another severity still runs.
+
 ## In CI
 
 `syg check` exits 1 on errors (and on warnings with `--strict`), 2 on a usage
-or configuration mistake, and 3 on a bug in Syg. `--format github` turns
+or configuration mistake or a file it cannot read, and 3 on a bug in Syg. `--format github` turns
 findings into annotations on the pull request, `--format sarif` feeds code
 scanning, and `--format json` is for your own tools. See [CI
 integration](ci.md).

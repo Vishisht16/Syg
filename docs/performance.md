@@ -21,3 +21,12 @@ check the 2,000-service module, 4.9 s to build and write it. Of a build,
 rendering YAML takes about 40% and writing the files about 30%. Every rule that
 relates objects to each other, such as which Services select a workload, uses an
 index built once per compilation, so no check grows faster than the module.
+
+## The largest modules
+
+The work of one compilation is bounded at 200,000 items (see the
+[limits](cli.md#limits)). At that bound, the largest check measured takes
+about 0.5 GB of memory, and the largest build about 1.3 GB, since a build holds
+its whole output in memory before it writes the first file. On a CI runner with
+less, set `GOMEMLIMIT` (as in `GOMEMLIMIT=512MiB`): the Go runtime collects
+garbage more often to stay near it, which is slower, and keeps the peak lower.

@@ -74,3 +74,9 @@ of these things. The full list is on the [non-goals](non-goals.md) page.
 - [Migrating from Helm](migrate-helm.md) walks through a real chart.
 - The [language reference](language.md) and the [CLI reference](cli.md) are
   complete; the [rule catalogue](rules/index.md) lists every check.
+- [Security](security.md) says what `syg check` protects against and how to
+  verify a download; [network and data](network.md), every connection Syg
+  makes; [support](support.md), where to ask.
+
+Kubernetes is a registered trademark of The Linux Foundation. Syg is not
+affiliated with or endorsed by it.

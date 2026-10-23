@@ -4,12 +4,16 @@ The Syg end-user licence agreement, version 1. It comes with each release of
 Syg as `EULA.md`, and applies to the release it comes with.
 
 This agreement is between you and Vishisht Mishra, who makes Syg ("we"). It
-covers the `syg` program in every form we publish it: the release archives,
-the Linux packages, the container image, the Homebrew formula and the Scoop
-manifest, together with the documentation (together, "Syg"). By installing,
-copying or using Syg, you accept this agreement. If you do not accept it, do
-not use Syg. If you accept it for an organization, you confirm that you may
-bind the organization to it, and "you" then means the organization.
+covers the `syg` program in every form we publish it (the release archives,
+the Linux packages and the container image), together with its documentation
+(together, "Syg"). By installing, copying or using Syg, you accept this
+agreement. If you do not accept it, do not use Syg. If you accept it for an
+organization, you confirm that you may bind the organization to it, and "you"
+then means the organization.
+
+The tools that install Syg (the install scripts, the GitHub Action, the
+Homebrew formula and the Scoop manifest) are published under the MIT licence,
+in their own repositories. What they install is Syg, under this agreement.
 
 ## 1. What you may do
 
@@ -52,10 +56,11 @@ produces from them are yours.
 
 ## 4. Usage statistics
 
-Syg sends anonymous usage statistics, as [the privacy page](privacy.md)
-describes: what is sent, what never is, and where it goes. They are off when
-you set `SYG_TELEMETRY=off` or `DO_NOT_TRACK=1`, or run `syg telemetry off`,
-and accepting this agreement does not require you to leave them on.
+Syg sends anonymous usage statistics, as the privacy page,
+<https://syg.vishisht.tech/privacy>, describes: what is sent, what never is,
+and where it goes. They are off when you set `SYG_TELEMETRY=off` or
+`DO_NOT_TRACK=1`, or run `syg telemetry off`, and accepting this agreement
+does not require you to leave them on.
 
 ## 5. Other components
 
@@ -80,7 +85,16 @@ a clean result is not a guarantee that a deployment is correct, secure or
 available. What you deploy, and how, remains your decision and your
 responsibility.
 
-## 8. Limitation of liability
+## 8. High-risk use
+
+Syg is not designed, made or licensed for use where its failure, or a mistake
+it does not catch, could lead to death, personal injury, or severe physical or
+environmental damage: in operating nuclear facilities, aircraft navigation or
+communication, air traffic control, life-support systems or weapons, for
+example. Do not rely on Syg there. If you use it there anyway, you do so
+entirely at your own risk.
+
+## 9. Limitation of liability
 
 To the extent the law allows, we are not liable for any indirect, incidental,
 special, consequential or exemplary damages, or for lost profits, revenue,
@@ -90,13 +104,21 @@ anything arising from Syg or this agreement is limited to the amount you paid
 us for Syg. Where the law does not allow a limitation, the limitation applies
 as far as the law does allow.
 
-## 9. End of the licence
+## 10. End of the licence
 
 This licence ends at once if you break this agreement. You must then stop
-using Syg and delete your copies of it. Sections 3, 7, 8 and 9 continue to
+using Syg and delete your copies of it. Sections 3 and 7 to 12 continue to
 apply after it ends.
 
-## 10. The whole agreement
+## 11. The law that governs it
+
+This agreement is governed by the laws of India, without regard to their rules
+on conflicts of laws. The courts at New Delhi, India, have exclusive
+jurisdiction over any dispute arising out of or in connection with this
+agreement or Syg. Nothing in it takes away a protection that the law of the
+country you live in gives you and that no agreement can exclude.
+
+## 12. The whole agreement
 
 This is the whole agreement between you and us about Syg. If a court finds a
 part of it unenforceable, the rest still applies. Not enforcing a part of it

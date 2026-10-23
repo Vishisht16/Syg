@@ -416,3 +416,279 @@ says nothing runs as it *in this module*, which is the honest scope of the claim
 
 A claim about the closed world: this module, the modules it imports, and its extern declarations, which are trusted, not verified. It says nothing about objects others apply to the cluster (`syg explain closed-world`). It assumes it sees every object of its kind, so a raw object it cannot see into is reported as reduced coverage (`syg explain coverage`).
 
+## host-access
+
+`CHK-SEC-002` · error · checked offline
+
+Where Pod Security baseline is enforced, the workload is accepted and its pods are refused, forever (FailedCreate, zero replicas); where it is not, they run with the node's processes, network or files, and a compromised container is a compromised node.
+
+### What you see
+
+It depends on the namespace the pods land in.
+
+Where Pod Security admission enforces the `baseline` level (a namespace
+labelled `pod-security.kubernetes.io/enforce: baseline` or stricter, or a
+cluster-wide default), a Deployment, DaemonSet or Job with such a template is
+accepted, with a warning, and every pod its controller then creates is refused.
+The workload sits at zero ready replicas, and the reason is in `FailedCreate`
+events on the ReplicaSet: `violates PodSecurity "baseline:latest": host
+namespaces (hostNetwork=true, hostPID=true), hostPath volumes (volume "root"),
+privileged (container "agent" must not set securityContext.privileged=true)`. A
+bare Pod is refused when it is applied.
+
+Where nothing enforces it, the pods run, and nothing says anything at the time.
+The cost arrives with the first compromise of one of these containers: what
+takes the container also has the part of the node the pod was given, and from
+the node, the credentials of everything else that runs there.
+
+### Why it happens
+
+Each setting removes part of the isolation between a container and its node:
+
+- **privileged** gives the container every capability and the node's devices;
+  Pod Security's own description is that privileged pods disable most security
+  mechanisms.
+- **hostPID** puts the container in the node's process namespace: it sees every
+  process on the node, and with the capabilities to do so can signal or trace
+  them.
+- **hostNetwork** gives the pod the node's network stack: it can bind the
+  node's addresses and reach what listens on the node's loopback, and
+  NetworkPolicy's behaviour for such pods is undefined, left to the network
+  plugin.
+- **hostIPC** shares the node's System V IPC and POSIX shared memory.
+- **hostPath** mounts a path of the node's filesystem; `/` is all of it, the
+  kubelet's credentials and the container runtime's socket included.
+- **hostPort** binds a port on the node's own address, outside the Service
+  that would otherwise front the pod.
+- **Windows HostProcess** runs the container as a process on the Windows host.
+
+The Pod Security Standards' `baseline` level, "minimally restrictive policy
+which prevents known privilege escalations", forbids every one of them, and
+Pod Security admission enforces it per namespace.
+
+### What Syg catches
+
+A pod spec that gives its pods part of their node:
+
+- a privileged container (`securityContext.privileged: true`), init containers
+  included;
+- a host namespace: `hostNetwork`, `hostPID` or `hostIPC`;
+- a `hostPath` volume;
+- a container port with a `hostPort`;
+- a Windows HostProcess pod or container.
+
+A workload Syg derives cannot have any of these: the language has no way to
+write them. A `raw` object can, so the rule reads the pod spec of every raw
+Pod, PodTemplate, ReplicationController, Deployment, ReplicaSet, StatefulSet,
+DaemonSet, Job and CronJob. The escape hatch is not the way around the
+language. It reads a custom resource's too: each mapping in one with a list of
+containers, or of init containers, is a pod spec, wherever it is: an Argo
+Rollout's `spec.template.spec`, an Elasticsearch's
+`spec.nodeSets[0].podTemplate.spec`, a Prometheus's `spec`, which takes a pod's
+fields as its own, an item of a list, or one inside another. Each object is
+reported once, at the first such setting, with the others marked beside it.
+
+### Why Syg checks rather than prevents
+
+For the workloads Syg derives it is a prevention: there is nothing to write.
+For raw objects it is a check, because some workloads do need their node: a
+network plugin, a log collector reading `/var/log`, a node exporter, a storage
+driver. Refusing them would leave no way to declare them in Syg at all.
+
+So the raw object is written as it is, and the rule reports what reaches the
+node, as an error by default. A module that runs a node agent sets
+`host-access: off`, or `warning`, under `rules:` in `syg.yaml`, which records
+that the decision was made.
+
+### Kubernetes versions
+
+Checked on Kubernetes 1.32 (k3s v1.32.12, 2026-10-20), with server-side dry
+runs and one Deployment created for real. In a namespace labelled
+`pod-security.kubernetes.io/enforce: baseline`, a Pod with `hostNetwork`,
+`hostPID`, a `hostPath` volume and a privileged container is refused, the
+message naming each; so are `hostIPC`, a `hostPort`, a privileged init
+container and a pod-level Windows HostProcess. A Deployment with the same
+template is accepted with a warning, and its ReplicaSet's pods are refused
+(`FailedCreate`). Without the label, the same Pod is accepted. Pod Security
+admission is stable since Kubernetes 1.25.
+
+### What Syg does not claim
+
+Syg reports the settings. Whether the workload needs them depends on what it
+does, which Syg does not read.
+
+It does not check the rest of Pod Security's baseline level: capabilities a
+container adds, seccomp, AppArmor and SELinux options and sysctls are
+`CHK-SEC-003`'s, for raw pod specs and for the workloads Syg derives. Nor does
+it check the `restricted` level.
+
+In a custom resource it reads what has a pod spec's shape, and nothing else: a
+container written another way, as an Argo Workflow's single `container`, or a
+pod spec inside a string, is not read, and the coverage note names the rule
+for an object that may run pods and holds no pod spec it can read (`syg
+explain coverage`). There it decodes only the fields it judges, each on its
+own, so that a value of the wrong type elsewhere hides nothing; one it judges,
+of the wrong type, is a warning. Whether the operator runs pods from what it
+reads is the operator's; the rule reads the spec as written, so a custom
+resource that holds pod templates as data, a policy's patterns or a
+documentation kind's examples, is judged as one that runs them: keep such
+objects in a module whose `syg.yaml` turns the rule off or down. Whether your
+namespaces enforce Pod Security is a fact of the cluster, which a Tier-1 check
+does not see.
+
+### Further reading
+
+- https://kubernetes.io/docs/concepts/security/pod-security-standards/
+- https://kubernetes.io/docs/concepts/security/pod-security-admission/
+- https://kubernetes.io/docs/concepts/storage/volumes/#hostpath
+- https://kubernetes.io/docs/concepts/services-networking/network-policies/
+
+### Scope
+
+A claim about the closed world: this module, the modules it imports, and its extern declarations, which are trusted, not verified. It says nothing about objects others apply to the cluster (`syg explain closed-world`).
+
+## kernel-privileges
+
+`CHK-SEC-003` · error · checked offline
+
+Where Pod Security baseline is enforced, the workload is accepted and its pods are refused, forever (FailedCreate, zero replicas); where it is not, the container runs with kernel powers, such as SYS_ADMIN or every system call, that make a compromised container a compromised node.
+
+### What you see
+
+It depends on the namespace the pods land in.
+
+Where Pod Security admission enforces the `baseline` level, the Deployment,
+StatefulSet or Job is accepted with a warning, and every pod its controller
+then creates is refused. The workload sits at zero ready replicas, and the
+reason is in `FailedCreate` events: `violates PodSecurity "baseline:v1.32":
+non-default capabilities (container "api" must not include "NET_ADMIN",
+"SYS_ADMIN" in securityContext.capabilities.add), seccompProfile (container
+"api" must not set securityContext.seccompProfile.type to "Unconfined")`. A
+bare Pod is refused when it is applied.
+
+Where nothing enforces it, the pods run, and nothing says anything at the time.
+The cost arrives with the first compromise of the container: what takes it
+also has the powers it was given over the node's kernel.
+
+### Why it happens
+
+A container is a set of processes on its node's kernel, confined by what the
+kernel lets them do:
+
+- **Capabilities** divide root's powers. The runtime's default set is what an
+  ordinary process inside a container needs. `SYS_ADMIN` alone covers mounting
+  filesystems and much of what a privileged container can do; `NET_ADMIN`
+  reconfigures the network; `SYS_PTRACE` reads and writes other processes'
+  memory; `DAC_READ_SEARCH` reads any file by handle, the basis of known
+  container escapes.
+- **seccomp** filters the system calls a container may make. `RuntimeDefault`
+  blocks the ones containers have no use for, many of them the way into kernel
+  vulnerabilities; `Unconfined` allows every one.
+- **AppArmor** and **SELinux** confine what a process may touch, by profile
+  and by label. `Unconfined`, or an SELinux type such as `spc_t` (a "super
+  privileged container"), turns that confinement off.
+- **sysctls** set kernel parameters. The safe ones are namespaced, so a pod
+  changes only its own; any other changes the node for every pod on it.
+
+The Pod Security Standards' `baseline` level, "minimally restrictive policy
+which prevents known privilege escalations", forbids each of these, and Pod
+Security admission enforces it per namespace.
+
+### What Syg catches
+
+A container that asks the kernel it shares with its node for more than Pod
+Security's `baseline` level allows:
+
+- a Linux capability beyond the container runtime's default set. Baseline lets
+  a container add only `AUDIT_WRITE`, `CHOWN`, `DAC_OVERRIDE`, `FOWNER`,
+  `FSETID`, `KILL`, `MKNOD`, `NET_BIND_SERVICE`, `SETFCAP`, `SETGID`,
+  `SETPCAP`, `SETUID` and `SYS_CHROOT`. Names are compared as written, so
+  `CAP_CHOWN` and `ALL` are refused too;
+- a seccomp profile of `Unconfined`, for the pod or a container;
+- an AppArmor profile of `Unconfined`, by field or by the
+  `container.apparmor.security.beta.kubernetes.io/NAME: unconfined`
+  annotation;
+- an SELinux user or role, or an SELinux type other than `container_t`,
+  `container_init_t`, `container_kvm_t` and `container_engine_t`;
+- a sysctl outside the safe set, the ones the kernel keeps apart for each pod.
+
+Two of these can be written in the language, and the rule reads every
+container of every workload Syg derives for them: `security { add ... }` with a
+capability beyond the default set, and `seccomp Unconfined`. A workload's
+`security` block applies to each container in its pod, sidecars and init
+containers included, so it is reported once, naming each container that has
+it. A `raw` object can carry all five, so the rule reads the pod spec, and the
+pod template's annotations, of every raw Pod, PodTemplate,
+ReplicationController, Deployment, ReplicaSet, StatefulSet, DaemonSet, Job and
+CronJob, and each pod spec in a custom resource, as `CHK-SEC-002` does: a
+mapping with a list of containers or of init containers, wherever it is, as an
+Argo Rollout's `spec.template.spec`, with the annotations of the `metadata`
+beside it. Each object is reported once, at the first such setting, with the
+others marked beside it.
+
+### Why Syg checks rather than prevents
+
+Some workloads need these powers: a network plugin needs `NET_ADMIN`, a
+debugger `SYS_PTRACE`, a tool that builds images some of `SYS_ADMIN`. Refusing
+them would leave no way to declare those workloads in Syg at all.
+
+So the workload is compiled as written, and the rule reports what it asks of
+the kernel, as an error by default. A module that runs such a workload sets
+`kernel-privileges: off`, or `warning`, under `rules:` in `syg.yaml`; every
+check then names the rule as one that did not run. A profile can also lock the
+whole `security` item (CHK-SEC-001), so that a platform team's golden path
+cannot be given these powers at all.
+
+### Kubernetes versions
+
+Checked on Kubernetes 1.32 (k3s v1.32.12, 2026-10-20), with server-side dry
+runs in a namespace labelled `pod-security.kubernetes.io/enforce: baseline`
+and `enforce-version: v1.32`. Each capability of the default set, alone, is
+accepted; `SYS_ADMIN`, `NET_ADMIN`, `NET_RAW`, `SYS_PTRACE`,
+`DAC_READ_SEARCH`, `ALL`, `CAP_CHOWN` and `chown` are refused, in an init
+container too. seccomp and AppArmor `Unconfined`, at the pod and at a
+container, and the AppArmor annotation `unconfined`, are refused;
+`RuntimeDefault` and `Localhost` are accepted. An SELinux user, a role, and the
+type `spc_t` are refused; the four container types and a level are accepted.
+The twelve safe sysctls are accepted, among them `net.ipv4.tcp_rmem` and
+`net.ipv4.tcp_wmem`, new in 1.32; `kernel.msgmax`, `net.core.somaxconn` and
+`net.ipv4.ip_forward` are refused, and so is a safe one written with `/` for
+`.`. A Deployment Syg built with `add SYS_ADMIN, NET_ADMIN` and
+`seccomp Unconfined` was accepted with a warning, and its ReplicaSet's pods
+were refused (`FailedCreate`). Pod Security admission is stable since
+Kubernetes 1.25.
+
+### What Syg does not claim
+
+Syg reports the settings. Whether the workload needs them depends on what it
+does, which Syg does not read.
+
+It checks Pod Security's `baseline` level, not `restricted`, which also
+requires dropping every capability, running as non-root and a seccomp profile.
+The `/proc` mount type (`procMount: Unmasked`), which baseline also forbids, is
+left out: Kubernetes 1.32 stores it as `Default` unless its `ProcMountType`
+feature gate is on, which it is not by default, and the server accepted it. Host namespaces, hostPath volumes, host ports and
+privileged containers are `CHK-SEC-002`'s.
+
+In a custom resource it reads what has a pod spec's shape, and nothing else,
+as `CHK-SEC-002` does: a container written another way is not read, and the
+coverage note names the rule for an object that may run pods and holds no pod
+spec it can read. It decodes only the fields it judges, each on its own, and
+one of the wrong type is a warning. A custom resource that holds pod templates
+as data is judged as one that runs them, as for `CHK-SEC-002`. Whether your
+namespaces enforce Pod Security is a fact of the cluster, which a Tier-1 check
+does not see.
+
+### Further reading
+
+- https://kubernetes.io/docs/concepts/security/pod-security-standards/
+- https://kubernetes.io/docs/concepts/security/pod-security-admission/
+- https://kubernetes.io/docs/tutorials/security/seccomp/
+- https://kubernetes.io/docs/tutorials/security/apparmor/
+- https://kubernetes.io/docs/tasks/administer-cluster/sysctl-cluster/
+- https://man7.org/linux/man-pages/man7/capabilities.7.html
+
+### Scope
+
+A claim about the closed world: this module, the modules it imports, and its extern declarations, which are trusted, not verified. It says nothing about objects others apply to the cluster (`syg explain closed-world`).
+

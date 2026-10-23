@@ -16,7 +16,8 @@ builds to the same objects. In detail, these surfaces do not change:
 | **The grammar.** Every valid program stays valid. New constructs may be added. | the grammar |
 | **Rule codes and names.** A code (`CHK-PDB-001`) and a readable name (`budget-blocks-eviction`) always name the same check, and neither is ever reused, even after its rule is retired. | `syg rules` |
 | **Exit codes.** 0 success, 1 findings that fail the build, 2 could not do what was asked (a usage or configuration mistake, or a file it cannot read or write), 3 an internal error. `syg lsp` follows the Language Server Protocol: 0 after shutdown and exit, 1 without shutdown, 2 for a malformed frame. | `syg help`, [CI](ci.md) |
-| **Machine-readable output.** The `--format json` schema, SARIF's fingerprints (`syg/v1`), and the provenance files, `provenance/ENV.json` (schema version 2). Fields may be added; none is renamed or removed. | the [JSON schema](schemas/diagnostics-v1.json), [CI](ci.md) |
+| **How a release is published.** The names of its files (`syg_VERSION_OS_ARCH.tar.gz` or `.zip`, `SHA256SUMS`, and each file's `.sigstore.json`), the signing identity (`build.yml` in github.com/vishisht16/syg), the image's tags (`MAJOR`, `MAJOR.MINOR.PATCH`, `latest`) and its user (65532). Scripts and pipelines that download and verify a release keep working. | [install](install.md), [security](security.md) |
+| **Machine-readable output.** The `--format json` object and its schema (`diagnostics-v1`, which the output names as its `$schema`), SARIF's fingerprints (`syg/v1`), and the provenance files, `provenance/ENV.json` (schema version 2). Fields may be added; none is renamed or removed. | the [JSON schema](schemas/diagnostics-v1.json), [CI](ci.md) |
 
 Syg's own tests hold each of these: a pinned set of projects is built on every
 change and compared, output and findings, with what 1.0.0 produced.

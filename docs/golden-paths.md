@@ -77,7 +77,10 @@ says the same.
 ## Imports and pinning
 
 `import "../platform"` names a module by a relative directory, which must be
-inside the git repository that holds the application. A module from elsewhere
+inside the git repository that holds the application, and is written as the
+directory is spelled: macOS and Windows find `../Platform` for `platform`, and
+Linux does not, so Syg refuses it everywhere rather than let a module check on
+a laptop and fail in CI. A module from elsewhere
 is vendored into `vendor/` with `syg mod get DIR`, from a checkout you fetched
 yourself; checking and building never need the network, and never read outside
 the repository.
@@ -93,6 +96,12 @@ If the platform module changes, the application's check fails until someone
 re-pins it deliberately, so a platform change never lands in an application
 unreviewed. `syg mod tidy` adds pins for new imports and drops unused ones, but
 never re-pins a changed module.
+
+An import brings in the platform module's profiles, types, schemas and
+relations, not what it deploys. Services, configs or raw objects the platform
+module declares are built, and checked, when it is the module being built; an
+application that imports it gets a note at the import saying how many there
+are.
 
 ## Environments
 
@@ -120,6 +129,14 @@ scaling, budget, rollout, exposure, environment variables, labels and
 annotations, and its own configs. It cannot add a workload or change what a
 profile locked. Its namespace is the one it declares, or `MODULE-ENV`
 (`payments-staging`).
+
+An environment's name is its directory and its files in a layout
+(`overlays/staging/`, `provenance/staging.json`), and part of its namespace and
+its Argo CD Application's name. So it is a DNS label: at most 63 lowercase
+letters, digits and `-`, starting and ending with a letter or digit, and not a
+name Windows keeps for a device (`con`, `nul`, `com1` and the like). `dev` and
+`DEV` would be one directory on macOS and Windows, and an Application named
+with upper case is refused.
 
 Each environment is checked as its own graph, so an override that breaks a
 rule is found where it is written. Had the budget above been `minAvailable 2`,

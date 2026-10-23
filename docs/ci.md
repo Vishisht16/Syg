@@ -16,20 +16,21 @@ Every command uses the same four codes:
 |---|---|
 | 0 | Success. Warnings are allowed. |
 | 1 | Check failures: errors, or warnings under `--strict`. For `syg mod tidy`, a module has changed since it was pinned. |
-| 2 | Usage or configuration error: a bad flag, a missing path, an unreadable `syg.yaml`. |
+| 2 | Usage or configuration error: a bad flag, a missing path, an unreadable `syg.yaml`, a snapshot or baseline Syg cannot read, a path through a link out of the repository. |
 | 3 | Internal compiler error. Please report it. |
 
 Gate on 1 to block a merge; treat 2 as a broken pipeline; treat 3 as a bug in
-Syg.
+Syg. A pipe that closes early (`syg check ... | head`) ends Syg by SIGPIPE,
+which a shell reports as 141, as for any Unix tool.
 
 ## Output formats
 
 `--format` takes four values:
 
 - `text` (the default) is for people, on stderr.
-- `json` is an array of findings on stdout, described by
-  [a JSON schema](schemas/diagnostics-v1.json); each position is a span, with an
-  end.
+- `json` is one object on stdout: `$schema`, the URL of
+  [its JSON schema](schemas/diagnostics-v1.json), and `findings`, the findings in
+  order (`jq '.findings[]'`). Each position is a span, with an end.
 - `sarif` is SARIF 2.1.0 on stdout, for code scanning. Every catalogued rule is
   described in the log with its rationale as help, so an alert explains itself
   the way `syg explain` does.
@@ -45,15 +46,17 @@ The simplest integration: findings appear on the diff, errors fail the job,
 and nothing needs GitHub Advanced Security.
 
 ```yaml
-      - name: syg check
-        run: ./syg check --format github services/
+      - uses: vishisht16/setup-syg@v1
+      - run: syg check --format github services/
 ```
+
+`setup-syg` installs Syg and puts it on `PATH`, after checking the download's
+checksum and its provenance. Its `version` input pins a release.
 
 Errors become `::error`, warnings `::warning`, and notes on a line `::notice`.
 A note about the module as a whole (no baseline, no snapshot) is a plain log
 line instead, because GitHub shows only ten annotations of each level per step
-and those notes would crowd out the findings. This repository's own CI runs
-this step over `examples/`.
+and those notes would crowd out the findings.
 
 ## GitHub code scanning
 
@@ -71,18 +74,14 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: install syg
-        env:
-          GH_TOKEN: ${{ github.token }}   # while the repository is private, a token with access to it
-        run: |
-          gh release download v1.0.0 --repo vishisht16/syg --pattern 'syg_1.0.0_linux_amd64.tar.gz' --pattern SHA256SUMS
-          sha256sum --check --ignore-missing SHA256SUMS
-          tar xzf syg_1.0.0_linux_amd64.tar.gz syg
+      - uses: actions/checkout@v7
+      - uses: vishisht16/setup-syg@v1
+        with:
+          version: 1.0.0
       - name: syg check
         # Write the log even when there are findings; fail the job afterwards.
-        run: ./syg check --format sarif services/ > syg.sarif || echo "SYG_EXIT=$?" >> "$GITHUB_ENV"
-      - uses: github/codeql-action/upload-sarif@v3
+        run: syg check --format sarif services/ > syg.sarif || echo "SYG_EXIT=$?" >> "$GITHUB_ENV"
+      - uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: syg.sarif
           category: syg
@@ -97,6 +96,57 @@ code alone.
 Each result carries a `partialFingerprints` value made from its rule, file,
 environment and message, not its line. An alert therefore follows its finding
 when lines move above it.
+
+## Other CI systems
+
+Anywhere else, install the binary in the job, then run `syg check` and gate on
+its exit code. The install script needs only `sh`, `tar` and `curl` or `wget`
+(BusyBox's will do). It checks the archive against the release's `SHA256SUMS`
+before installing it:
+
+```yaml
+# GitLab CI
+syg:
+  image: alpine:3
+  script:
+    - wget -qO- https://syg.vishisht.tech/install.sh | SYG_VERSION=1.0.0 SYG_INSTALL_DIR=/usr/local/bin sh
+    - syg check --format json services/ > syg.json
+  artifacts:
+    when: always
+    paths: [syg.json]
+```
+
+```yaml
+# Bitbucket Pipelines
+pipelines:
+  pull-requests:
+    '**':
+      - step:
+          image: alpine:3
+          script:
+            - wget -qO- https://syg.vishisht.tech/install.sh | SYG_VERSION=1.0.0 SYG_INSTALL_DIR=/usr/local/bin sh
+            - syg check --strict services/
+```
+
+```groovy
+// Jenkins, on an agent with sh and curl
+sh 'curl -fsSL https://syg.vishisht.tech/install.sh | SYG_VERSION=1.0.0 SYG_INSTALL_DIR="$WORKSPACE/.bin" sh'
+sh '"$WORKSPACE/.bin/syg" check services/'
+```
+
+Where a job can run a container's own command, the
+[image](container.md) needs no installation. It has no shell, so it does
+not serve as a job's image in GitLab CI, Bitbucket Pipelines or CircleCI,
+which run a script inside it:
+
+```console
+$ docker run --rm -v "$PWD:/src:ro" ghcr.io/vishisht16/syg:1.0.0 check services/
+```
+
+Pin the version (`SYG_VERSION`, or the image's tag), so that a new release
+changes your pipeline only when you choose. Within a version, a new rule
+arrives as a warning, and fails a build no earlier than the next minor version
+([compatibility](compatibility.md)).
 
 ## What CI cannot check
 

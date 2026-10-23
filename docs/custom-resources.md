@@ -36,12 +36,66 @@ annotations (`syg.vishisht.tech/raw: "true"` among them, so anyone reading the o
 the cluster knows no check vouched for it), and emits the object as written.
 It adds no labels: a raw object carries the labels you write.
 
+The name must be one the API server takes for the kind: a lowercase DNS
+subdomain for most kinds and every custom resource, a DNS label that starts
+with a letter for a Service, at most 63 characters for a Job and 52 for a
+CronJob, and any name without `/` or `%` for the RBAC kinds, upper case
+included. Each object is written to a file named by its kind and name, so two
+that would share one are an error: two RBAC names that differ only in case,
+which macOS and Windows would write to one file, or one kind's name in two API
+groups under one name (`syg explain raw`).
+
+A Secret is never raw, since its values would then live in source: declare
+`secret NAME { key ... }`, with keys only. That holds for a kind named Secret
+in any group. Only the core group serves one, and `evil.example/v1/Secret`
+would carry its values into source all the same.
+
 Raw is the escape hatch for anything the language does not model, and it is
 honest about what that costs: Syg does not see inside an object it knows
 nothing about. A rule that needs to see every object of a kind (every route
 to a Service, say) reports **reduced coverage** for a raw one, instead of a
 clean result it has not earned. `syg check --stats` counts native and raw
 objects, so you can see how much of a module Syg actually checks.
+
+Three rules do read inside a raw object, so that it is not a way around them:
+
+- `wildcard-permission` (CHK-RBAC-003) reads raw RBAC, for wildcards and for
+  bindings to cluster-admin;
+- `host-access` (CHK-SEC-002) reads the pod spec of a raw Pod, Deployment,
+  StatefulSet, DaemonSet, Job or the like, and every one in a custom resource,
+  wherever it is (any mapping with a list of containers or of init
+  containers, as an Argo Rollout's `spec.template.spec`, one inside another
+  included), for what the language has no way to write: a privileged
+  container, the node's network, processes or IPC, a hostPath volume, a host
+  port;
+- `kernel-privileges` (CHK-SEC-003) reads the same pod specs, and the pod
+  template's annotations, for what they ask of the kernel beyond Pod Security
+  baseline: a capability outside the default set, seccomp or AppArmor
+  `Unconfined`, an SELinux user, role or other type, a sysctl outside the safe
+  set. It reads the workloads Syg derives too, for the two of these the
+  language can write.
+
+In a custom resource they read only what they judge, the pod's host
+namespaces, security contexts, volumes and ports, each field on its own, so
+that a value of the wrong type elsewhere hides nothing. One they read, of the
+wrong type (`privileged: "true"`), is a warning at its line: they cannot
+judge it.
+
+A node agent that needs its node turns `host-access` off, or down to a warning,
+in [`syg.yaml`](checks.md#configuring-rules), and one that needs more of the
+kernel does the same with `kernel-privileges`. That records the decision, and
+every check then names the rule it did not run.
+
+A custom resource that holds pod templates as data, not to run them (a
+policy's patterns, a documentation kind's examples), is read as one that runs
+them, and its examples are reported as a running pod's settings would be.
+Keep such objects in a module of their own, whose `syg.yaml` sets the two
+rules to a warning or off: the module that imports it neither emits its raw
+objects nor judges them.
+
+A raw object in an imported module belongs to that module's own build: the
+module that imports it type-checks it, but neither emits it nor runs its rules
+on it, and the import gets a note saying so.
 
 ## Schemas
 
@@ -55,10 +109,24 @@ $ syg schema vendor --from https://github.com/cert-manager/cert-manager/releases
 $ syg schema vendor --from cluster.snapshot.yaml --only monitoring.coreos.com
 ```
 
-The source can be a CRD file, a directory, a URL, or a [snapshot](checks.md#snapshots). This
-is the one place Syg fetches anything, and it is a command you run, never a
-side effect of `check` or `build`. A field the schema does not have, or a
+The source can be a CRD file, a directory, an https URL, or a
+[snapshot](checks.md#snapshots). This is the one place Syg fetches anything,
+and it is a command you run, never a side effect of `check` or `build`. A URL
+is fetched over https only, redirects included, and a response larger than
+64 MiB is refused rather than cut. A field the schema does not have, or a
 value of the wrong type, is an error at the line in the YAML.
+
+Each kind has one schema, from one CRD. A kind found twice in what you vendor,
+in one source or two, is refused, naming both places: keep one. So are two
+kinds whose file names differ only in case, such as `Widget` and `widget` of
+one group, since macOS and Windows hold the two files as one; a module whose
+`schemas/` holds two such files, or two files of one kind, is refused when it
+is loaded.
+
+A built-in kind's schema is Syg's own, and cannot be vendored over: `schema
+vendor` skips one, and a vendored schema of one is refused when the module is
+loaded, so a raw object and a `relate` of the kind are checked against the same
+schema.
 
 ## Relations
 
@@ -98,6 +166,9 @@ The relations are:
 
 A field path is checked against the schema where the `relate` is written, so a
 misspelt path is an error rather than a relation that silently checks nothing.
+So are two relations on one field that contradict each other, and one relation
+written twice in a module. One that an imported library also declares gets a
+note: it is the same relation, checked once.
 
 ## Built-in kinds
 

@@ -2,9 +2,21 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://syg.vishisht.tech/schemas/diagnostics-v1.json",
   "title": "syg check --format json",
-  "description": "The diagnostics `syg check` and `syg build` write with --format json (CLI-Check-001, DIAG-001): one array, in the order the text format prints them. Fields are added, never renamed or removed, within a major version (docs/compatibility.md).",
-  "type": "array",
-  "items": { "$ref": "#/definitions/diagnostic" },
+  "description": "What `syg check` and `syg build` write with --format json (CLI-Check-001, DIAG-001): one object, naming this schema as its $schema, with the findings in the order the text format prints them. Fields are added, never renamed or removed, within a major version (docs/compatibility.md).",
+  "type": "object",
+  "required": ["$schema", "findings"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "const": "https://syg.vishisht.tech/schemas/diagnostics-v1.json",
+      "description": "This schema's URL, so that an editor or a validator finds it."
+    },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/diagnostic" },
+      "description": "Every finding, error, warning and note, in the order the text format prints them."
+    }
+  },
   "definitions": {
     "diagnostic": {
       "type": "object",
