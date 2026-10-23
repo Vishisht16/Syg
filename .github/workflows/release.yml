@@ -67,6 +67,10 @@ jobs:
     uses: ./.github/workflows/build.yml
     with:
       tag: ${{ github.event.inputs.tag || github.ref_name }}
+    # Named so that build.yml may read it; it exists only in the `release`
+    # environment, whose value its binaries job receives.
+    secrets:
+      CORE_READ_TOKEN: ${{ secrets.CORE_READ_TOKEN }}
 
   # What a user does: download, verify, run, on each OS, from the archive. On
   # Linux, every check the documentation gives users too, as written.

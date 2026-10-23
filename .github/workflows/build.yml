@@ -26,6 +26,13 @@ on:
         description: "the tag of syg-core to build, e.g. v1.0.0"
         type: string
         required: true
+    secrets:
+      # A called workflow sees only the secrets its caller names, even one the
+      # job's environment holds; the value is the `release` environment's,
+      # which binaries names.
+      CORE_READ_TOKEN:
+        description: "reads the private source (fine-grained: Vishisht16/Syg-Core, Contents read-only)"
+        required: false
     outputs:
       digest:
         description: "the image's digest, which release.yml tags once the release is published"
