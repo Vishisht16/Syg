@@ -40,10 +40,10 @@ fix.
 ## Verifying a release
 
 Every release is built by this repository's release workflow. A reusable
-workflow, `build.yml`, signs every file with cosign (keyless, tied to the
-workflow and recorded in Sigstore's transparency log), and attests the
-provenance of each archive, package and image. Its signing jobs run none of
-the build's code. To check that a download is one it built:
+workflow, `build.yml`, signs every file the build makes with cosign
+(keyless, tied to the workflow and recorded in Sigstore's transparency log),
+and attests the provenance of each archive, package and image. Its signing
+jobs run none of the build's code. To check that a download is one it built:
 
 ```console
 $ gh attestation verify syg_1.0.0_linux_amd64.tar.gz --repo Vishisht16/Syg \
