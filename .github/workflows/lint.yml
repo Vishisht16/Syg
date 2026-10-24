@@ -28,6 +28,16 @@ jobs:
       - name: actionlint
         # Built from its module, which Go checks against the checksum database.
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -color
+      - name: zizmor
+        # The workflows' security audit, 1.30.1, its image pinned by digest.
+        # Below medium it only suggests GitHub's newer `$/` form for this
+        # repository's own workflows and action, which actionlint cannot read
+        # yet. A finding it should not report is ignored where it is, with
+        # the reason beside it.
+        run: >-
+          docker run --rm -v "$PWD:/repo:ro" -w /repo
+          ghcr.io/zizmorcore/zizmor@sha256:a2eb396d886c053073405c7a980f2139ba2248ec172243cfa3841e57196e8101
+          --offline --min-severity medium .github
       - name: the install script, against a fake release
         # Any executable stands in for syg: the test is of the installer.
         run: |
