@@ -3,8 +3,9 @@
 ## Reporting a vulnerability
 
 Use GitHub's private vulnerability reporting on this repository: **Security →
-Report a vulnerability**. Please do not open a public issue for it.
-`https://syg.vishisht.tech/.well-known/security.txt` points here too.
+Report a vulnerability**, or write to syg@vishisht.tech. Please do not open a
+public issue for it. `https://syg.vishisht.tech/.well-known/security.txt`
+points here too.
 
 A report is most useful with:
 
@@ -13,9 +14,50 @@ A report is most useful with:
 - what an attacker gains: what they control (a pull request, a module, a
   flag, the editor's language server) and what they reach.
 
-You get an answer in the report itself. A fix is released as a new version,
-and published with an advisory in this repository, crediting you if you
-wish.
+## What you can expect from us
+
+- An acknowledgement within 3 business days.
+- Within 14 days, our assessment: whether it is a vulnerability, how severe,
+  and what happens next.
+- A fix within 30 days for a critical or high severity problem, and within
+  90 days for the rest. If it will take longer, we tell you why, and when.
+- A coordinated disclosure: when the fix is released as a new version, with
+  an advisory in this repository, or 90 days after your report, whichever
+  comes first.
+- Credit in the advisory and in the
+  [hall of fame](https://syg.vishisht.tech/security.html#hall-of-fame), if
+  you wish. Your name is never shared without your consent.
+
+## Testing Syg: safe harbor
+
+Break it if you can, and tell us how. Fuzz it, feed it hostile modules,
+attack its language server, its installers and its release files. Security
+research done in good faith and within this policy is authorized:
+
+- we will not take legal action against you for it, or ask anyone else to;
+  if someone else does, we will make it known that you acted within this
+  policy;
+- the license agreement forbids reverse engineering, decompiling and
+  disassembling Syg; for security research within this policy, we waive
+  that restriction.
+
+Within this policy means:
+
+- test on your own machines and your own installations;
+- no load or denial-of-service tests against `syg.vishisht.tech` or the
+  statistics relay, `api.syg.vishisht.tech`, which other people use: a
+  finding about either is still welcome;
+- do not access, change or delete anyone else's data, and if you come
+  across some, stop and tell us;
+- give us the time above to fix a problem before you make it public.
+
+This policy covers what Syg owns. It cannot authorize anything against
+GitHub, Vercel or PostHog, whose own policies apply. If you are unsure
+whether something is covered, ask first: syg@vishisht.tech.
+
+What Syg went through before its release, what broke, and what has not been
+tested yet: [how Syg was tested](https://syg.vishisht.tech/testing.html). To
+test what comes next before it is released, write to syg@vishisht.tech.
 
 ## What is covered
 
