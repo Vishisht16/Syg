@@ -239,6 +239,9 @@ jobs:
     needs: publish
     if: ${{ !contains(github.event.inputs.tag || github.ref_name, '-') }}
     runs-on: ubuntu-24.04
+    # TAP_TOKEN, which can rewrite the formula users install from, is the
+    # `release` environment's: this job waits for approval as the build does.
+    environment: release
     permissions:
       contents: write
     steps:
