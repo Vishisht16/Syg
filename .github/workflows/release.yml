@@ -18,8 +18,8 @@ name: release
 #     which are published, ever leave the runner.
 #   - Tests run quietly: hack/quiet-test.py prints how many packages passed,
 #     never a test's output, a stack trace or a package name. Failures are
-#     read in the CI (vishisht16/syg-ci), which runs the same tests and keeps
-#     their output encrypted.
+#     read in the CI (ci.yml), which runs the same tests and keeps their
+#     output encrypted.
 #   - No verbose build flags; the checkout is deleted when the job ends.
 #   - Third-party actions are pinned by commit.
 #   - Syg's own runs here send no usage statistics (SYG_TELEMETRY=off).

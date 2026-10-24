@@ -1,0 +1,276 @@
+name: ci
+run-name: ci ${{ github.event.inputs.ref || 'weekly' }}${{ inputs.ubuntu && inputs.ubuntu != 'ubuntu-latest' && format(' on {0}', inputs.ubuntu) || '' }}
+
+# The continuous integration of Syg's private source
+# (github.com/vishisht16/syg-core): its jobs, hack/ci.sh there, on GitHub's
+# runners. Started by the source itself for each commit pushed to it (its one
+# workflow sends the commit's ID here), by watch.yml for a commit it finds
+# untested, by hand for a branch, tag or commit, and weekly. Each run sets the
+# commit status "ci" on the commit it tests. Started by hand on another Ubuntu
+# image than ubuntu-latest (`ubuntu`), the Linux jobs run there, and the
+# status is "ci (IMAGE)".
+#
+# Guardrails, as release.yml's, so that no source reaches this repository or
+# its logs:
+#   - Never started by a pull request: a fork's workflow never sees the
+#     secret, and no outside change runs here.
+#   - The source is checked out with CORE_ACCESS_TOKEN (one repository: its
+#     contents read-only, its commit statuses read and write), which only the
+#     `ci` environment holds and only the steps that need it are given, and
+#     quietly (hack/checkout-core.sh). The environment needs no approval, and
+#     its jobs record no deployment.
+#   - A job's output goes to a file, never to the log. The file is encrypted
+#     with age to a key kept with the source, and is the only upload; the log
+#     says which job passed.
+#   - No caches; third-party actions pinned by commit; Syg sends no usage
+#     statistics from here.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "the branch, tag or commit of syg-core to test (HEAD: its default branch)"
+        required: true
+        default: HEAD
+      ubuntu:
+        description: the Ubuntu image the Linux jobs run on
+        type: choice
+        options: [ubuntu-latest, ubuntu-24.04, ubuntu-26.04]
+        default: ubuntu-latest
+  schedule:
+    # Weekly: a newly published advisory can make code that has not changed
+    # vulnerable, and the runners change under it.
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: read
+
+# A newer run for the same ref, on the same image, replaces an older one.
+concurrency:
+  group: ci-${{ github.event.inputs.ref || 'weekly' }}-${{ inputs.ubuntu || 'ubuntu-latest' }}
+  cancel-in-progress: true
+
+env:
+  # The public half of syg-core's hack/ci-logs.key.
+  LOG_RECIPIENT: age1augl97syl0e95ap905j9pcxfh35fm5g0eldxjyt452f0aaywnpqsvmm3jd
+  SYG_TELEMETRY: "off"
+  # The commit status this run sets (hack/ci-status.sh).
+  STATUS_CONTEXT: ${{ (inputs.ubuntu || 'ubuntu-latest') == 'ubuntu-latest' && 'ci' || format('ci ({0})', inputs.ubuntu) }}
+
+jobs:
+  # The commit every job tests, its commit status set to pending.
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: ci
+      deployment: false
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: resolve
+        env:
+          CORE_READ_TOKEN: ${{ secrets.CORE_ACCESS_TOKEN }}
+          REF: ${{ github.event.inputs.ref || 'HEAD' }}
+        run: bash hack/ci-resolve.sh "$REF"
+
+  # Unit, golden and module tests, on every OS Syg ships for.
+  test:
+    needs: resolve
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["${{ inputs.ubuntu || 'ubuntu-latest' }}", macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    environment:
+      name: ci
+      deployment: false
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: check out the source
+        env:
+          CORE_READ_TOKEN: ${{ secrets.CORE_ACCESS_TOKEN }}
+          REF: ${{ needs.resolve.outputs.sha }}
+        run: bash hack/checkout-core.sh "$REF"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: core/go.mod
+          cache: false
+      - name: test
+        env:
+          NAME: test-${{ matrix.os }}
+        run: bash hack/ci-run.sh "$NAME" bash hack/ci.sh test
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() && hashFiles('logs/*.age') != '' }}
+        with:
+          name: log-test-${{ matrix.os }}
+          path: logs/*.age
+          retention-days: 14
+
+  # Formatting, the rule triples, coverage, and a short fuzz of each target.
+  lint:
+    needs: resolve
+    runs-on: ${{ inputs.ubuntu || 'ubuntu-latest' }}
+    timeout-minutes: 30
+    environment:
+      name: ci
+      deployment: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: check out the source
+        env:
+          CORE_READ_TOKEN: ${{ secrets.CORE_ACCESS_TOKEN }}
+          REF: ${{ needs.resolve.outputs.sha }}
+        run: bash hack/checkout-core.sh "$REF"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: core/go.mod
+          cache: false
+      - name: lint
+        run: bash hack/ci-run.sh lint bash hack/ci.sh lint
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() && hashFiles('logs/*.age') != '' }}
+        with:
+          name: log-lint
+          path: logs/*.age
+          retention-days: 14
+
+  # The end-to-end suites on a real cluster, at every supported Kubernetes
+  # minor's ends and middle.
+  kind:
+    name: kind (${{ matrix.k8s }})
+    needs: resolve
+    runs-on: ${{ inputs.ubuntu || 'ubuntu-latest' }}
+    timeout-minutes: 45
+    environment:
+      name: ci
+      deployment: false
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {k8s: "1.30", node: "kindest/node:v1.30.13"}
+          - {k8s: "1.32", node: "kindest/node:v1.32.5"}
+          - {k8s: "1.33", node: "kindest/node:v1.33.1"}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: check out the source
+        env:
+          CORE_READ_TOKEN: ${{ secrets.CORE_ACCESS_TOKEN }}
+          REF: ${{ needs.resolve.outputs.sha }}
+        run: bash hack/checkout-core.sh "$REF"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: core/go.mod
+          cache: false
+      - uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
+        with:
+          version: v0.29.0
+          # The kubectl the suites have run with; the action's default is newer
+          # than every cluster here by more than kubectl's supported skew.
+          kubectl_version: v1.31.4
+          node_image: ${{ matrix.node }}
+          cluster_name: kind
+          config: core/hack/kind.yaml
+      - name: kind
+        env:
+          K8S: ${{ matrix.k8s }}
+        run: bash hack/ci-run.sh "kind-$K8S" bash hack/ci.sh kind "$K8S"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() && hashFiles('logs/*.age') != '' }}
+        with:
+          name: log-kind-${{ matrix.k8s }}
+          path: logs/*.age
+          retention-days: 14
+
+  # Known vulnerabilities (govulncheck) and static analysis (staticcheck).
+  scan:
+    needs: resolve
+    runs-on: ${{ inputs.ubuntu || 'ubuntu-latest' }}
+    timeout-minutes: 15
+    environment:
+      name: ci
+      deployment: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: check out the source
+        env:
+          CORE_READ_TOKEN: ${{ secrets.CORE_ACCESS_TOKEN }}
+          REF: ${{ needs.resolve.outputs.sha }}
+        run: bash hack/checkout-core.sh "$REF"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: core/go.mod
+          cache: false
+      - name: scan
+        run: bash hack/ci-run.sh scan bash hack/ci.sh scan
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() && hashFiles('logs/*.age') != '' }}
+        with:
+          name: log-scan
+          path: logs/*.age
+          retention-days: 14
+
+  # The documentation, built as it is published, and link-checked. The site
+  # itself is syg-site's, from the Markdown docs.yml publishes.
+  docs:
+    needs: resolve
+    runs-on: ${{ inputs.ubuntu || 'ubuntu-latest' }}
+    timeout-minutes: 15
+    environment:
+      name: ci
+      deployment: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: check out the source, with its history and tags (the docs show the version)
+        env:
+          CORE_READ_TOKEN: ${{ secrets.CORE_ACCESS_TOKEN }}
+          REF: ${{ needs.resolve.outputs.sha }}
+        run: bash hack/checkout-core.sh "$REF" tags
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: core/go.mod
+          cache: false
+      - name: docs
+        run: bash hack/ci-run.sh docs bash hack/ci.sh docs "$RUNNER_TEMP/site"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() && hashFiles('logs/*.age') != '' }}
+        with:
+          name: log-docs
+          path: logs/*.age
+          retention-days: 14
+
+  # The commit status "ci" in syg-core: what its pull requests show.
+  report:
+    needs: [resolve, test, lint, kind, scan, docs]
+    if: ${{ always() && needs.resolve.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: ci
+      deployment: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - env:
+          CORE_READ_TOKEN: ${{ secrets.CORE_ACCESS_TOKEN }}
+          SHA: ${{ needs.resolve.outputs.sha }}
+          NEEDS: ${{ toJSON(needs) }}
+        run: bash hack/ci-status.sh "$SHA" "$NEEDS"

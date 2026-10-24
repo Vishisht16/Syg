@@ -1,0 +1,72 @@
+name: chaos
+run-name: chaos ${{ github.event.inputs.ref }}
+
+# What differs between Linux, macOS and Windows, probed black-box on each
+# platform's own runners: syg-core's hack/ci.sh chaos, which builds the binary
+# and runs docs/audit/chaos.py against it (links and junctions, case, reserved
+# names, long paths, CRLF, files in use, pipes, the console, the statistics
+# sender, the language server's URIs, PowerShell's completion). Started by
+# hand; it sets no commit status. The probes report what happened, for a
+# person to read: a job fails only if a probe could not run. Its source and
+# output are kept as ci.yml's are.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "the branch, tag or commit of syg-core to probe (HEAD: its default branch)"
+        required: true
+        default: HEAD
+
+permissions:
+  contents: read
+
+# One run per ref at a time; a second waits.
+concurrency:
+  group: chaos-${{ github.event.inputs.ref }}
+  cancel-in-progress: false
+
+env:
+  # The public half of syg-core's hack/ci-logs.key.
+  LOG_RECIPIENT: age1augl97syl0e95ap905j9pcxfh35fm5g0eldxjyt452f0aaywnpqsvmm3jd
+  SYG_TELEMETRY: "off"
+
+jobs:
+  chaos:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, macos-15-intel, windows-latest, windows-11-arm]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    environment:
+      name: ci
+      deployment: false
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: check out the source
+        env:
+          CORE_READ_TOKEN: ${{ secrets.CORE_ACCESS_TOKEN }}
+          REF: ${{ github.event.inputs.ref }}
+        run: bash hack/checkout-core.sh "$REF"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: core/go.mod
+          cache: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - name: chaos
+        env:
+          NAME: chaos-${{ matrix.os }}
+        run: bash hack/ci-run.sh "$NAME" bash hack/ci.sh chaos "$RUNNER_TEMP/chaos"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() && hashFiles('logs/*.age') != '' }}
+        with:
+          name: log-chaos-${{ matrix.os }}
+          path: logs/*.age
+          retention-days: 14

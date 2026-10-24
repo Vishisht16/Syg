@@ -131,7 +131,9 @@ paths or code; [PRIVACY.md](PRIVACY.md) says exactly what, and
 The source is not public. This repository holds the releases, the installers
 and the [relay](relay/) that receives the usage statistics. Every release here
 is built and tested by this repository's own
-[release workflow](.github/workflows/release.yml).
+[release workflow](.github/workflows/release.yml), and every commit to the
+source is tested by its [CI](.github/workflows/ci.yml), on Linux, macOS and
+Windows and on Kubernetes clusters.
 
 Kubernetes is a registered trademark of The Linux Foundation. Syg is not
 affiliated with or endorsed by it.

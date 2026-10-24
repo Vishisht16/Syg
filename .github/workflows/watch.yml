@@ -1,0 +1,37 @@
+name: watch
+
+# Starts ci.yml for each commit of syg-core it has not tested: the head of the
+# default branch, and of each Dependabot branch (a pull request's). A commit
+# it has tested carries the commit status "ci". A push to syg-core starts
+# ci.yml at once; this catches what that missed, such as Dependabot's
+# branches, whose pushes are given no secret there. Hourly; it warns rather
+# than fails, as each failed run would send an email.
+on:
+  schedule:
+    - cron: "19 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: ci
+      deployment: false
+    permissions:
+      contents: read
+      actions: write  # to start ci.yml
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - env:
+          CORE_READ_TOKEN: ${{ secrets.CORE_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: bash hack/ci-watch.sh
