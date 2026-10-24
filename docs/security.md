@@ -46,11 +46,12 @@ A way around any of these is a vulnerability: [report it](#reporting-a-vulnerabi
 Every release is built and signed in public, by the release workflow of
 [github.com/vishisht16/syg](https://github.com/vishisht16/syg):
 
-- every file is listed in `SHA256SUMS`;
-- every file is signed with [cosign](https://docs.sigstore.dev), keyless. A
-  signature names the workflow that made it, and is recorded in Sigstore's
-  public transparency log;
-- each archive and package also carries a provenance attestation.
+- every file the build makes is listed in `SHA256SUMS`;
+- each of those is signed with [cosign](https://docs.sigstore.dev),
+  keyless, beside it in a `.sigstore.json`. A signature names the workflow
+  that made it, and is recorded in Sigstore's public transparency log;
+- each archive and package also carries a provenance attestation, a signed
+  statement of how it was built; `syg_1.0.0.intoto.jsonl` holds them all.
 
 The checksum, on any machine:
 
@@ -133,12 +134,51 @@ The container image is checked the same way, as its page shows
   attestation. `THIRD_PARTY_NOTICES.txt`, in every archive and package,
   holds their licences.
 
+## How Syg is tested
+
+Every change is tested on Linux, macOS and Windows, fuzzed, scanned, and run
+against real clusters. Before 1.0, Syg also went through six rounds of
+testing whose brief was to break it. [How Syg was tested](testing.md) says
+what it went through, what broke and what changed, and what has not been
+tested yet.
+
+## Test it yourself
+
+Break it if you can, and tell us how. Fuzz it, feed it hostile modules,
+attack its language server, its installers and its release files: the
+next section says how to report what you find, and the one after it, what
+you can expect from us.
+
+**Safe harbor.** Security research done in good faith and within this
+policy is authorized:
+
+- we will not take legal action against you for it, or ask anyone else to;
+  if someone else does, we will make it known that you acted within this
+  policy;
+- the license agreement forbids reverse engineering, decompiling and
+  disassembling Syg; for security research within this policy, we waive
+  that restriction.
+
+Within this policy means:
+
+- test on your own machines and your own installations;
+- no load or denial-of-service tests against `syg.vishisht.tech` or the
+  statistics relay, `api.syg.vishisht.tech`, which other people use: a
+  finding about either is still welcome;
+- do not access, change or delete anyone else's data, and if you come
+  across some, stop and tell us;
+- give us the time below to fix a problem before you make it public.
+
+This policy covers what Syg owns. It cannot authorize anything against
+GitHub, Vercel or PostHog, whose own policies apply. If you are unsure
+whether something is covered, ask first: syg@vishisht.tech.
+
 ## Reporting a vulnerability
 
 Use GitHub's private vulnerability reporting on
 [the public repository](https://github.com/vishisht16/syg/security/advisories/new),
-and please do not open a public issue. `/.well-known/security.txt` on this
-site points there too.
+or write to syg@vishisht.tech, and please do not open a public issue.
+`/.well-known/security.txt` on this site points there too.
 
 A report is most useful with:
 
@@ -147,8 +187,23 @@ A report is most useful with:
 - what an attacker gains: what they control (a pull request, a module, a
   flag, the editor's language server) and what they reach.
 
-You get an answer in the report itself. A fix is released as a new version,
-with an advisory that credits you, if you wish.
+## What you can expect from us
+
+- An acknowledgement within 3 business days.
+- Within 14 days, our assessment: whether it is a vulnerability, how severe,
+  and what happens next.
+- A fix within 30 days for a critical or high severity problem, and within
+  90 days for the rest. If it will take longer, we tell you why, and when.
+- A coordinated disclosure: when the fix is released as a new version, with
+  an advisory, or 90 days after your report, whichever comes first.
+- Credit in the advisory and in the hall of fame below, if you wish. Your
+  name is never shared without your consent.
+
+## Hall of fame
+
+The people who found a vulnerability in Syg and reported it, with our
+thanks. None yet: the first report that leads to a fix puts its reporter
+here.
 
 ## Supported versions
 

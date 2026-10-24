@@ -26,8 +26,9 @@ Syg will not do, and why, so read them first.
 
 ## What to expect
 
-Issues are answered as time allows, and vulnerability reports first. There is
-no guaranteed response time.
+Issues are answered as time allows, with no guaranteed response time. A
+vulnerability report comes first, with the response times the security page
+sets ([what you can expect from us](security.md#what-you-can-expect-from-us)).
 
 The latest release is the supported one. A fix ships as a new version, so
 upgrading is the fix. The [compatibility](compatibility.md) page says what a
